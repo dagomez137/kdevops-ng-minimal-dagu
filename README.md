@@ -24,7 +24,9 @@ nix develop --command dagu --config config.yaml start fstests -- \
     kernel_url=file://$HOME/mirror/linux.git qemu_url=file://$HOME/mirror/qemu.git
 ```
 
-The host needs `/dev/kvm` and a `systemd --user` manager. Run logs, the
+The host needs `/dev/kvm` and a `systemd --user` manager; the root step
+of `.github/workflows/fstests.yaml` sets both up on a fresh Ubuntu 24.04
+runner and is the list of what a host's owner does by hand. Run logs, the
 kernel, QEMU and the closure GC roots go under
 `~/.local/state/kdevops-ng-minimal-dagu`; the VM's state (NVMe drives, the
 fstests share with the results) under `~/.local/state/qemu-system/fstests`;

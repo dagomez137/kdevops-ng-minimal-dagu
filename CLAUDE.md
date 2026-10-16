@@ -15,7 +15,9 @@ in Dagu is recorded, not patched.
 ## Rules (from kdevops-ng, never bypassed)
 
 The five rules in `~/src/kdevops-ng/docs/concepts/principles.rst` hold here:
-user mode only (no `sudo`; root setup is a manual step the README lists),
+user mode only (no `sudo`; root setup is a manual step the README lists,
+except on the throwaway GitHub runner, where it is the one root step of
+`.github/workflows/fstests.yaml`),
 every tool from the pinned flake, VMs and long work as systemd units, writes
 only to this project's state directories and `~/.config/systemd`, and every
 command a step runs printed so it can be replayed by hand.

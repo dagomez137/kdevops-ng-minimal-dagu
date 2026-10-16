@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+# The DAG on a free GitHub-hosted runner. The runner is a throwaway VM, so
+# the root setup the README leaves to the host's owner runs here, in the one
+# step that says so; everything after it runs as the runner user.
+name: fstests
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  fstests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prepare the runner (root)
+        run: |
+          set -o xtrace
+          df --human-readable /
+          sudo rm --recursive --force /usr/share/dotnet /usr/local/lib/android \
+            /opt/ghc /opt/hostedtoolcache/CodeQL
+          df --human-readable /
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+          # virtiofsd's namespace sandbox maps the runner user to root in a
+          # user namespace, which Ubuntu's AppArmor refuses by default.
+          sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id --user).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id --user)" >>"$GITHUB_ENV"
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run the DAG
+        run: nix develop --command dagu --config config.yaml start fstests
+
+      - name: Show the run
+        if: always()
+        run: |
+          nix develop --command dagu --config config.yaml status fstests
+          df --human-readable /
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fstests
+          path: |
+            ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
+            ~/.local/state/qemu-system/fstests/xfstests/results
+          if-no-files-found: ignore

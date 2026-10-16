@@ -5,7 +5,7 @@ kdevops-ng's bringup cut down to one path and run by vanilla
 an fstests NixOS closure, boot them as a `systemd --user` VM over virtiofs
 and run fstests on two emulated NVMe drives. It exists to find out what
 kdevops-ng needs from Dagu and whether the same run fits on a free GitHub
-runner.
+runner. `GAPS.md` lists what it found.
 
 ## Run
 

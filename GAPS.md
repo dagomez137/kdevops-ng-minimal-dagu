@@ -40,11 +40,14 @@ is busy" from Nix's evaluation cache; the warnings are harmless.
 
 ## Nix and reuse
 
-**The kernel still differs across hosts.** Builds of v7.2.11 from two
-directories, and on 4 CPUs with the runner's locale and umask, all give
-6rxljzdc...-linux-7.2.11 on hz-debian, but the runner built 4as41gm0...
-from the same commit. The `kernel-*` artifacts carry the runner's tree for
-diffoscope to name the bytes.
+**Tools missing from a devShell come from the host.** `nix develop` keeps
+the caller's `PATH` behind the shell's own entries, so a tool the shell
+lacks is found on the host without an error. The kernel shell had no Rust
+toolchain: here `~/.cargo/bin/rustc` 1.91.1 enabled CONFIG_RUST, on the
+runner the preinstalled rustc 1.99.0 did not, and the two kernels differed
+in 114 files. The shell now carries nixos-flake's Rust toolchain; a
+`nix develop --ignore-environment` with an explicit `--keep` list would
+make the next missing tool fail instead of leak.
 
 **Nothing is reused between runs.** Every run clones, builds the kernel and
 QEMU and evaluates the closure again: 29m16s of the first CI job, against

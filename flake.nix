@@ -45,11 +45,18 @@
         };
 
         kernel = pkgs.mkShell {
-          # zlib for gendwarfksyms and resolve_btfids' libbpf.
-          packages = toolchain.kernel ++ [
-            pkgs.git
-            pkgs.zlib
-          ];
+          # zlib for gendwarfksyms and resolve_btfids' libbpf; matrixExtras
+          # for CONFIG_RUST, which otherwise depends on whatever rustc the
+          # host has on PATH.
+          packages =
+            toolchain.kernel
+            ++ toolchain.matrixExtras
+            ++ [
+              pkgs.git
+              pkgs.zlib
+            ];
+          # CONFIG_RUST builds core and alloc from source.
+          env.RUST_LIB_SRC = pkgs.rustPlatform.rustLibSrc;
           hardeningDisable = [ "all" ];
           # mkShell derives $out from the working directory and the compiler
           # wrappers put it in -frandom-seed and -L$out/lib, so pin both for

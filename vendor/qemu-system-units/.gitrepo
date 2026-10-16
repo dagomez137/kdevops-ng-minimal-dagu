@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/linux-kdevops/qemu-system-units
+	branch = main
+	commit = ecafb788d2446916f7051e4a9e018b31a8f960e5
+	parent = 5cf89054867ec2367437d34054f7ccd6d6e122cb
+	method = merge
+	cmdver = 0.4.9

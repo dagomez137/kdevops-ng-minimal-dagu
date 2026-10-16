@@ -40,6 +40,12 @@ is busy" from Nix's evaluation cache; the warnings are harmless.
 
 ## Nix and reuse
 
+**The kernel still differs across hosts.** Builds of v7.2.11 from two
+directories, and on 4 CPUs with the runner's locale and umask, all give
+6rxljzdc...-linux-7.2.11 on hz-debian, but the runner built 4as41gm0...
+from the same commit. The `kernel-*` artifacts carry the runner's tree for
+diffoscope to name the bytes.
+
 **Nothing is reused between runs.** Every run clones, builds the kernel and
 QEMU and evaluates the closure again: 29m16s of the first CI job, against
 7m57s for a whole run on a 16-core host.

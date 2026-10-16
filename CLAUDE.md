@@ -27,6 +27,11 @@ options for every input, nothing read from the environment but `HOME`,
 `set -o xtrace` for the log, `name=value` results to the `--output` file.
 The DAG only wires steps.
 
+CI is dumb: `.github/workflows/` prepares the host, runs the same
+`dagu start` and `dagu status` a developer runs locally and collects files
+the DAG wrote. Anything that computes, parses or decides belongs in a step,
+so a local run produces it too.
+
 ## Conventions
 
 Long command flags everywhere (`mkdir --parents`); no em or en dashes in

@@ -35,7 +35,8 @@ cp "$config" "$dir/build/.config"
 make=(make --no-print-directory -C "$dir/src" O="$dir/build"
 	KBUILD_BUILD_TIMESTAMP="@$(git -C "$dir/src" log -1 --format=%ct)"
 	KBUILD_BUILD_USER=kdevops KBUILD_BUILD_HOST=kdevops KBUILD_BUILD_VERSION=1
-	KCFLAGS="-ffile-prefix-map=$dir/=")
+	KCFLAGS="-ffile-prefix-map=$dir/=" KAFLAGS="-ffile-prefix-map=$dir/="
+	KRUSTFLAGS="--remap-path-prefix=$dir/=")
 "${make[@]}" olddefconfig
 "${make[@]}" -j"$(nproc)"
 "${make[@]}" INSTALL_MOD_PATH="$dir/out" INSTALL_MOD_STRIP=1 modules_install

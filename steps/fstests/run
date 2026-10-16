@@ -5,9 +5,11 @@
 ##
 ## Lay CONFIG down on the xfstests share in DIR with ARGS as the arguments
 ## to fstests' check, create two empty NVMe drives, boot qemu-system@VM.service
-## and wait for the guest to run fstests and power off. Print the guest's
-## console, append results=<dir> to OUTPUT and fail unless fstests.service
-## succeeded in the guest:
+## and wait for the guest to run fstests and power off. Keep the guest's
+## console in DIR/xfstests/console.log and a summary with the slowest tests
+## in DIR/xfstests/report.md, print both, append results=<dir> and
+## report=<file> to OUTPUT and fail unless fstests.service succeeded in the
+## guest:
 ##
 ##   nix develop --command steps/fstests/run --name fstests \
 ##       --config guest/fstests.config --tests '-g quick' \
@@ -34,8 +36,29 @@ truncate --size 16G "$state/nvme0.raw" "$state/nvme1.raw"
 unit=qemu-system@$name.service
 since=$(date +%s)
 systemctl --user start --wait "$unit" || true
-journalctl --user-unit "$unit" --since "@$since" --output cat --no-pager
+journalctl --user-unit "$unit" --since "@$since" --output cat --no-pager |
+	tee "$state/xfstests/console.log"
+
+# The kernel logs "run fstests <test> at <date>" as each test starts; a test
+# lasts until the next one starts.
+starts=$(sed --quiet --regexp-extended \
+	's/^\[ *([0-9.]+)\] run fstests ([^ ]+) at .*/\1 \2/p' "$state/xfstests/console.log")
+{
+	echo "### fstests \`$tests\`"
+	echo '```'
+	grep --extended-regexp '^(Ran|Not run|Failures|Failed|Passed)' \
+		"$state/xfstests/results/check.log" | cut --characters=1-400 ||
+		echo 'no check.log: fstests did not finish'
+	awk 'NF && !n++ { first = $1 } NF { last = $1 } END {
+		printf "%d tests started over %d s\n", n, last - first }' <<<"$starts"
+	echo 'Slowest:'
+	awk 'NR > 1 { printf "%d %s\n", $1 - t, name } { t = $1; name = $2 }' <<<"$starts" |
+		sort --numeric-sort --reverse | head --lines 10
+	echo '```'
+} >"$state/xfstests/report.md"
+cat "$state/xfstests/report.md"
 
 echo "results=$state/xfstests/results" >>"$output"
+echo "report=$state/xfstests/report.md" >>"$output"
 read -r result _ <"$state/xfstests/status"
 [ "$result" = success ]

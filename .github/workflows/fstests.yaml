@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 # The DAG on a free GitHub-hosted runner. The runner is a throwaway VM, so
 # the root setup the README leaves to the host's owner runs here, in the one
-# step that says so; everything after it runs as the runner user.
+# step that says so; everything after it runs as the runner user. Past that
+# step the job runs only what a developer runs locally (dagu start, dagu
+# status) and collects the files the DAG wrote.
 name: fstests
 
 on:
@@ -11,7 +13,16 @@ on:
 jobs:
   fstests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: smoke
+            tests: generic/001 generic/002 generic/003 generic/004 generic/005
+          - name: quick
+            tests: -g quick
+    name: fstests (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v5
 
@@ -35,18 +46,24 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run the DAG
-        run: nix develop --command dagu --config config.yaml start fstests
+        run: >-
+          nix develop --command dagu --config config.yaml start fstests --
+          "tests=${{ matrix.tests }}"
 
       - name: Show the run
         if: always()
-        run: |
-          nix develop --command dagu --config config.yaml status fstests
-          df --human-readable /
+        run: nix develop --command dagu --config config.yaml status fstests
+
+      # The job page shows this without a token; the logs and the artifacts
+      # need one.
+      - name: Publish the report
+        if: always()
+        run: cat ~/.local/state/qemu-system/fstests/xfstests/report.md >>"$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fstests
+          name: fstests-${{ matrix.name }}
           path: |
             ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
             ~/.local/state/qemu-system/fstests/xfstests/results

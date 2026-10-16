@@ -18,10 +18,6 @@ jobs:
       - name: Prepare the runner (root)
         run: |
           set -o xtrace
-          df --human-readable /
-          sudo rm --recursive --force /usr/share/dotnet /usr/local/lib/android \
-            /opt/ghc /opt/hostedtoolcache/CodeQL
-          df --human-readable /
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
             sudo tee /etc/udev/rules.d/99-kvm.rules
           sudo udevadm control --reload-rules

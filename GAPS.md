@@ -31,9 +31,16 @@ unstable can carry it. Close it with a nixpkgs pull request.
 DAG forwarded `XDG_RUNTIME_DIR` in `env:`. Any variable a step needs from
 the caller has to be listed there.
 
-**No live guest console.** The fstests step prints the console from the
-journal after QEMU exits, and `dagu status` shows only the tail of each
-step's output, so on CI a long run shows nothing until it ends.
+**`dagu start` cannot show a step's output live.** It prints step events
+only; a step's output goes to its log file, which the fstests step now
+fills while the guest runs. A step's `stdout: /dev/stdout` and
+`stderr: /dev/stderr` do copy the output to dagu's own as it comes, every
+500 ms, but the step then fails with "sync /dev/stderr: invalid argument":
+`closeResources` in `internal/runtime/output.go` calls `Sync()` on each
+redirect file and fsync on a pipe or terminal returns EINVAL. So a CI job
+log shows nothing between "Step started" and the end of a 5 h step.
+Closing it upstream means skipping `Sync()` for files that are not
+regular.
 
 **Parallel `nix` calls warn.** Steps started together log "SQLite database
 is busy" from Nix's evaluation cache; the warnings are harmless.

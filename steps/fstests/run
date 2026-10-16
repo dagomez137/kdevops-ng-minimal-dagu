@@ -5,8 +5,8 @@
 ##
 ## Lay CONFIG down on the xfstests share in DIR with ARGS as the arguments
 ## to fstests' check, create two empty NVMe drives, boot qemu-system@VM.service
-## and wait for the guest to run fstests and power off. Keep the guest's
-## console in DIR/xfstests/console.log and a summary with the slowest tests
+## and follow the guest's console while it runs fstests and powers off. Keep
+## the console in DIR/xfstests/console.log and a summary with the slowest tests
 ## in DIR/xfstests/report.md, print both, append results=<dir> and
 ## report=<file> to OUTPUT and fail unless fstests.service succeeded in the
 ## guest:
@@ -36,9 +36,15 @@ truncate --size 16G "$state/nvme0.raw" "$state/nvme1.raw"
 
 unit=qemu-system@$name.service
 since=$(date +%s)
-systemctl --user start --wait "$unit" || true
-journalctl --user-unit "$unit" --since "@$since" --output cat --no-pager |
-	tee "$state/xfstests/console.log"
+systemctl --user start "$unit"
+# Follow the guest's console while it runs. The scope is bound to the VM, so
+# systemd stops journalctl when QEMU exits, and journalctl prints what the
+# journal still holds before it does.
+systemd-run --user --scope --quiet --collect \
+	--property BindsTo="$unit" --property After="$unit" \
+	journalctl --follow --synchronize-on-exit=yes --user-unit "$unit" \
+	--since "@$since" --output cat --no-pager |
+	tee "$state/xfstests/console.log" || true
 
 # The kernel logs "run fstests <test> at <date>" as each test starts; a test
 # lasts until the next one starts.

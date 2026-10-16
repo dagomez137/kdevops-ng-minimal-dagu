@@ -24,14 +24,17 @@ env:
 
 steps:
   - id: host
-    run: nix develop --command steps/host/check --output "$DAGU_OUTPUT_FILE"
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/host/check --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: cpus
 
   - id: kernel
     depends: host
     run: >-
-      nix develop .#kernel --command steps/kernel/build
+      nix develop --ignore-env --keep-env-var HOME .#kernel
+      --command steps/kernel/build
       --url ${params.kernel_url} --ref ${params.kernel_ref}
       --config kernel/imageless_defconfig --dir "$STATE/linux"
       --output "$DAGU_OUTPUT_FILE"
@@ -41,7 +44,8 @@ steps:
   - id: qemu
     depends: host
     run: >-
-      nix develop .#qemu --command steps/qemu/build
+      nix develop --ignore-env --keep-env-var HOME .#qemu
+      --command steps/qemu/build
       --url ${params.qemu_url} --ref ${params.qemu_ref} --dir "$STATE/qemu"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
@@ -50,7 +54,8 @@ steps:
   - id: closure
     depends: host
     run: >-
-      nix develop --command steps/nix/closure --flake . --dir "$STATE/closure"
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/nix/closure --flake . --dir "$STATE/closure"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: init
@@ -63,7 +68,8 @@ steps:
   - id: render
     depends: [kernel, qemu, closure, virtiofsd]
     run: >-
-      nix develop --command steps/qsu/render --name fstests
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+      --command steps/qsu/render --name fstests
       --qemu ${steps.qemu.outputs.qemu}
       --virtiofsd "$STATE/virtiofsd/bin/virtiofsd"
       --kernel ${steps.kernel.outputs.kernel}
@@ -76,7 +82,8 @@ steps:
     # Leaves a 6 h GitHub job time to build and to upload the results.
     timeout_sec: 16200
     run: >-
-      nix develop --command steps/fstests/run --name fstests
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+      --command steps/fstests/run --name fstests
       --config guest/fstests.config --tests "${params.tests}" --state "$VM_STATE"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
@@ -86,5 +93,7 @@ steps:
 handler_on:
   exit:
     run: |
-      nix develop --command systemctl --user stop qemu-system@fstests.service
-      nix develop --command steps/host/check --output /dev/stdout
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+        --command systemctl --user stop qemu-system@fstests.service
+      nix develop --ignore-env --keep-env-var HOME \
+        --command steps/host/check --output /dev/stdout

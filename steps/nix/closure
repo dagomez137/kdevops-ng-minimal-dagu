@@ -6,7 +6,8 @@
 ## DIR/toplevel and append init=<path> and initrd=<path> from its bootspec to
 ## FILE:
 ##
-##   nix develop --command steps/nix/closure --flake . \
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/nix/closure --flake . \
 ##       --dir ~/.local/state/kdevops-ng-minimal-dagu/closure --output /dev/stdout
 set -o errexit -o nounset -o pipefail
 

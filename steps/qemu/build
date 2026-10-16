@@ -6,7 +6,8 @@
 ## DIR/build, install it into DIR/install and append qemu=<binary> to FILE.
 ## Run it in the qemu devShell:
 ##
-##   nix develop .#qemu --command steps/qemu/build \
+##   nix develop --ignore-env --keep-env-var HOME .#qemu \
+##       --command steps/qemu/build \
 ##       --url https://gitlab.com/qemu-project/qemu.git --ref v11.1.2 \
 ##       --dir ~/.local/state/kdevops-ng-minimal-dagu/qemu --output /dev/stdout
 set -o errexit -o nounset -o pipefail

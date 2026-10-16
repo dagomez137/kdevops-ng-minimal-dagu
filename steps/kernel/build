@@ -6,7 +6,8 @@
 ## the image and the modules to the Nix store and append kernel=<store path>
 ## to FILE. Run it in the kernel devShell:
 ##
-##   nix develop .#kernel --command steps/kernel/build \
+##   nix develop --ignore-env --keep-env-var HOME .#kernel \
+##       --command steps/kernel/build \
 ##       --url https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git \
 ##       --ref v7.2.11 --config kernel/imageless_defconfig \
 ##       --dir ~/.local/state/kdevops-ng-minimal-dagu/linux --output /dev/stdout

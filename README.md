@@ -13,14 +13,17 @@ runner. `GAPS.md` lists what it found.
 scheduler. Run it from this checkout:
 
 ```sh
-nix develop --command dagu --config config.yaml start fstests
-nix develop --command dagu --config config.yaml status fstests
+nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+    --command dagu --config config.yaml start fstests
+nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+    --command dagu --config config.yaml status fstests
 ```
 
 Clone from local mirrors instead of git.kernel.org and GitLab:
 
 ```sh
-nix develop --command dagu --config config.yaml start fstests -- \
+nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+    --command dagu --config config.yaml start fstests -- \
     kernel_url=file://$HOME/mirror/linux.git qemu_url=file://$HOME/mirror/qemu.git
 ```
 

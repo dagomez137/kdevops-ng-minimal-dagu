@@ -47,12 +47,15 @@ jobs:
 
       - name: Run the DAG
         run: >-
-          nix develop --command dagu --config config.yaml start fstests --
+          nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+          --command dagu --config config.yaml start fstests --
           "tests=${{ matrix.tests }}"
 
       - name: Show the run
         if: always()
-        run: nix develop --command dagu --config config.yaml status fstests
+        run: >-
+          nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+          --command dagu --config config.yaml status fstests
 
       # The job page shows this without a token; the logs and the artifacts
       # need one.

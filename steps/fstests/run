@@ -11,7 +11,8 @@
 ## report=<file> to OUTPUT and fail unless fstests.service succeeded in the
 ## guest:
 ##
-##   nix develop --command steps/fstests/run --name fstests \
+##   nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+##       --command steps/fstests/run --name fstests \
 ##       --config guest/fstests.config --tests '-g quick' \
 ##       --state ~/.local/state/qemu-system/fstests \
 ##       --output /dev/stdout

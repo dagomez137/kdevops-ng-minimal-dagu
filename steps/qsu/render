@@ -10,7 +10,8 @@
 ## DIR/xfstests. DIR is the unit's state directory and also holds the vars
 ## file and the NVMe drives:
 ##
-##   nix develop --command steps/qsu/render --name fstests \
+##   nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+##       --command steps/qsu/render --name fstests \
 ##       --qemu ~/.local/state/kdevops-ng-minimal-dagu/qemu/install/bin/qemu-system-x86_64 \
 ##       --virtiofsd ~/.local/state/kdevops-ng-minimal-dagu/virtiofsd/bin/virtiofsd \
 ##       --kernel /nix/store/...-linux-7.2.11 --init /nix/store/...-nixos-system-.../init \

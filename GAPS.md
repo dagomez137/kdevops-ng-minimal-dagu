@@ -49,6 +49,19 @@ in 114 files. The shell now carries nixos-flake's Rust toolchain; a
 `nix develop --ignore-environment` with an explicit `--keep` list would
 make the next missing tool fail instead of leak.
 
+**Out-of-tree Rust kernels are not reproducible across directories.**
+Since dda135077ecc9 ("rust: build: remap path to avoid absolute path",
+v7.1), an `O=` build passes rustc `--remap-path-scope=macro` when rustc
+has it (stable in 1.95, which nixpkgs ships; 1.91 lacks it). The scope
+covers every remap, ours from `KRUSTFLAGS` included, so Rust debug info
+keeps the absolute build directory as `DW_AT_comp_dir`, the build ID
+follows and so do `bzImage` and every Rust module. rustc refuses a second
+scope option. `O=build` under the source tree, kdevops-ng's layout,
+makes the source paths relative but leaves that one. The kernel step
+builds in the source tree instead, which gets no scope option; kdevops-ng's
+Rust kernels built with rustc 1.95 carry the same leak, and
+`Documentation/kbuild/reproducible-builds.rst` says nothing about Rust.
+
 **Nothing is reused between runs.** Every run clones, builds the kernel and
 QEMU and evaluates the closure again: 29m16s of the first CI job, against
 7m57s for a whole run on a 16-core host.

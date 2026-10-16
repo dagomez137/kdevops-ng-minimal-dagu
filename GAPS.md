@@ -32,15 +32,35 @@ DAG forwarded `XDG_RUNTIME_DIR` in `env:`. Any variable a step needs from
 the caller has to be listed there.
 
 **`dagu start` cannot show a step's output live.** It prints step events
-only; a step's output goes to its log file, which the fstests step now
-fills while the guest runs. A step's `stdout: /dev/stdout` and
-`stderr: /dev/stderr` do copy the output to dagu's own as it comes, every
-500 ms, but the step then fails with "sync /dev/stderr: invalid argument":
-`closeResources` in `internal/runtime/output.go` calls `Sync()` on each
-redirect file and fsync on a pipe or terminal returns EINVAL. So a CI job
-log shows nothing between "Step started" and the end of a 5 h step.
-Closing it upstream means skipping `Sync()` for files that are not
-regular.
+("Step started", "DAG run finished") and nothing a step writes; that goes
+to the step's log file under `log_dir`, which the fstests step fills while
+the guest runs. The `quick` job's "Run the DAG" printed nothing for 1h19m.
+`dagu start` has no option to change this (`--quiet` only removes more).
+
+**A step redirected to a pipe or terminal fails.** A step's `stdout:` or
+`stderr:` names a file that Dagu writes as well as the step log
+(`internal/runtime/output.go`, "Output to both log and stdout"), flushed
+every 500 ms (`startOutputFlusher` in `internal/runtime/node.go`). Set to
+`/dev/stdout` and `/dev/stderr` it does stream a step live, but when the
+step ends `closeResources` calls `Sync()` on each redirect file
+(`output.go:315` at v2.20.1), fsync on a pipe or terminal returns EINVAL,
+and the step is marked failed with "sync <file>: invalid argument"
+although the command exited 0. Reproducer, run with both redirects set:
+
+```yaml
+steps:
+  - id: tick
+    run: for i in 1 2 3; do echo "tick $i"; echo "err $i" >&2; sleep 2; done
+    stdout: /dev/stdout
+    stderr: /dev/stderr
+```
+
+`dagu start` on it printed each pair of lines 2 s apart, then failed the
+step with "sync /dev/stderr: invalid argument". The fix upstream is to
+skip `Sync()`, or ignore EINVAL, for a redirect that is not a regular
+file. Until then the only live view of a
+step on CI would be the workflow following the log file itself, which the
+CI rule in `CLAUDE.md` forbids.
 
 **Parallel `nix` calls warn.** Steps started together log "SQLite database
 is busy" from Nix's evaluation cache; the warnings are harmless.

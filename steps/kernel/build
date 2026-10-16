@@ -32,16 +32,16 @@ cp "$config" "$dir/build/.config"
 # module signing.
 "$dir/src/scripts/config" --file "$dir/build/.config" \
 	--disable SECURITY_LOCKDOWN_LSM --disable MODULE_SIG
-make=(make --no-print-directory -C "$dir/src" O="$dir/build"
-	KBUILD_BUILD_TIMESTAMP="@$(git -C "$dir/src" log -1 --format=%ct)"
+make=(make --no-print-directory --directory="$dir/src" O="$dir/build"
+	KBUILD_BUILD_TIMESTAMP="@$(git -C "$dir/src" log --max-count=1 --format=%ct)"
 	KBUILD_BUILD_USER=kdevops KBUILD_BUILD_HOST=kdevops KBUILD_BUILD_VERSION=1
 	KCFLAGS="-ffile-prefix-map=$dir/=" KAFLAGS="-ffile-prefix-map=$dir/="
 	KRUSTFLAGS="--remap-path-prefix=$dir/=")
 "${make[@]}" olddefconfig
-"${make[@]}" -j"$(nproc)"
+"${make[@]}" --jobs="$(nproc)"
 "${make[@]}" INSTALL_MOD_PATH="$dir/out" INSTALL_MOD_STRIP=1 modules_install
-release=$("${make[@]}" -s kernelrelease)
-cp "$dir/build/$("${make[@]}" -s image_name)" "$dir/out/bzImage"
+release=$("${make[@]}" --silent kernelrelease)
+cp "$dir/build/$("${make[@]}" --silent image_name)" "$dir/out/bzImage"
 cp "$dir/build/.config" "$dir/out/config"
 rm --force "$dir/out/lib/modules/$release/build"
 

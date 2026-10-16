@@ -28,6 +28,6 @@ mkdir --parents "$dir/build"
 cd "$dir/build"
 "$dir/src/configure" --target-list=x86_64-softmmu --prefix="$dir/install" \
 	--disable-download
-make -j"$(nproc)"
+make --jobs="$(nproc)"
 make install
 echo "qemu=$dir/install/bin/qemu-system-x86_64" >>"$output"

@@ -55,7 +55,7 @@
           # wrappers put it in -frandom-seed and -L$out/lib, so pin both for
           # the build to be the same from any directory and host.
           shellHook = ''
-            export NIX_CFLAGS_COMPILE="$(sed -E 's,-frandom-seed=[^ ]*,-frandom-seed=reproducible,g' <<< "$NIX_CFLAGS_COMPILE")"
+            export NIX_CFLAGS_COMPILE="$(sed --regexp-extended 's,-frandom-seed=[^ ]*,-frandom-seed=reproducible,g' <<< "$NIX_CFLAGS_COMPILE")"
             export NIX_CFLAGS_COMPILE="''${NIX_CFLAGS_COMPILE//$out//build-shell}"
             export NIX_LDFLAGS="''${NIX_LDFLAGS//$out//build-shell}"
           '';

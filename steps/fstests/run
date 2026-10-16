@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/run --name VM --config FILE --state DIR --output FILE
+##
+## Lay CONFIG down on the xfstests share in DIR, create two empty NVMe
+## drives, boot qemu-system@VM.service and wait for the guest to run fstests
+## and power off. Print the guest's console, append results=<dir> to OUTPUT
+## and fail unless fstests.service succeeded in the guest:
+##
+##   nix develop --command steps/fstests/run --name fstests \
+##       --config guest/fstests.config --state ~/.local/state/qemu-system/fstests \
+##       --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--name | --config | --state | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${name:?} ${config:?} ${state:?} ${output:?}"
+
+set -o xtrace
+rm --recursive --force "$state/xfstests" "$state/nvme0.raw" "$state/nvme1.raw"
+mkdir --parents "$state/xfstests"
+cp "$config" "$state/xfstests/fstests.config"
+truncate --size 16G "$state/nvme0.raw" "$state/nvme1.raw"
+
+unit=qemu-system@$name.service
+since=$(date +%s)
+systemctl --user start --wait "$unit" || true
+journalctl --user-unit "$unit" --since "@$since" --output cat --no-pager
+
+echo "results=$state/xfstests/results" >>"$output"
+read -r result _ <"$state/xfstests/status"
+[ "$result" = success ]

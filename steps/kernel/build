@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/build --url URL --ref REF --config DEFCONFIG --dir DIR --output FILE
+##
+## Clone REF of URL into DIR/src, build it in DIR/build from DEFCONFIG, add
+## the image and the modules to the Nix store and append kernel=<store path>
+## to FILE. Run it in the kernel devShell:
+##
+##   nix develop .#kernel --command steps/kernel/build \
+##       --url https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git \
+##       --ref v7.2.11 --config kernel/imageless_defconfig \
+##       --dir ~/.local/state/kdevops-ng-minimal-dagu/linux --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--url | --ref | --config | --dir | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${url:?} ${ref:?} ${config:?} ${dir:?} ${output:?}"
+
+set -o xtrace
+rm --recursive --force "$dir"
+git clone --depth 1 --branch "$ref" "$url" "$dir/src"
+mkdir --parents "$dir/build" "$dir/out"
+cp "$config" "$dir/build/.config"
+
+# The same tree and config give the same bytes on any host and any day; a
+# signing key would be generated afresh by every build, and lockdown selects
+# module signing.
+"$dir/src/scripts/config" --file "$dir/build/.config" \
+	--disable SECURITY_LOCKDOWN_LSM --disable MODULE_SIG
+make=(make --no-print-directory -C "$dir/src" O="$dir/build"
+	KBUILD_BUILD_TIMESTAMP="@$(git -C "$dir/src" log -1 --format=%ct)"
+	KBUILD_BUILD_USER=kdevops KBUILD_BUILD_HOST=kdevops KBUILD_BUILD_VERSION=1
+	KCFLAGS="-ffile-prefix-map=$dir/=")
+"${make[@]}" olddefconfig
+"${make[@]}" -j"$(nproc)"
+"${make[@]}" INSTALL_MOD_PATH="$dir/out" INSTALL_MOD_STRIP=1 modules_install
+release=$("${make[@]}" -s kernelrelease)
+cp "$dir/build/$("${make[@]}" -s image_name)" "$dir/out/bzImage"
+cp "$dir/build/.config" "$dir/out/config"
+rm --force "$dir/out/lib/modules/$release/build"
+
+kernel=$(nix store add-path --name "linux-$release" "$dir/out")
+nix build "$kernel" --out-link "$dir/result"
+echo "kernel=$kernel" >>"$output"

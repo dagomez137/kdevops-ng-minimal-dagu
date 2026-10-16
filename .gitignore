@@ -1,0 +1,3 @@
+# `nix build` GC-root symlinks.
+/result
+/result-*

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/nix/closure --flake FLAKE --dir DIR --output FILE
+##
+## Build the fstests guest's NixOS system closure from FLAKE, keep it as
+## DIR/toplevel and append init=<path> and initrd=<path> from its bootspec to
+## FILE:
+##
+##   nix develop --command steps/nix/closure --flake . \
+##       --dir ~/.local/state/kdevops-ng-minimal-dagu/closure --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--flake | --dir | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${flake:?} ${dir:?} ${output:?}"
+
+set -o xtrace
+mkdir --parents "$dir"
+nix build "$flake#nixosConfigurations.fstests.config.system.build.toplevel" \
+	--out-link "$dir/toplevel"
+jq --raw-output '."org.nixos.bootspec.v1" | "init=\(.init)", "initrd=\(.initrd)"' \
+	"$dir/toplevel/boot.json" >>"$output"

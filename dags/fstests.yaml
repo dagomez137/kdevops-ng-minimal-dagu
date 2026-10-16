@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+description: >-
+  Build a kernel, QEMU and the fstests NixOS closure, boot them as
+  qemu-system@fstests.service and run fstests on two NVMe drives.
+working_dir: ..
+
+params:
+  - name: kernel_url
+    default: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+  - name: kernel_ref
+    default: v7.2.11
+  - name: qemu_url
+    default: https://gitlab.com/qemu-project/qemu.git
+  - name: qemu_ref
+    default: v11.1.2
+
+env:
+  # Dagu hands steps a filtered environment; systemctl --user needs this.
+  - XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}
+  - STATE: ${HOME}/.local/state/kdevops-ng-minimal-dagu
+  - VM_STATE: ${HOME}/.local/state/qemu-system/fstests
+
+steps:
+  - id: kernel
+    run: >-
+      nix develop .#kernel --command steps/kernel/build
+      --url ${params.kernel_url} --ref ${params.kernel_ref}
+      --config kernel/imageless_defconfig --dir "$STATE/linux"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: kernel
+
+  - id: qemu
+    run: >-
+      nix develop .#qemu --command steps/qemu/build
+      --url ${params.qemu_url} --ref ${params.qemu_ref} --dir "$STATE/qemu"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: qemu
+
+  - id: closure
+    run: >-
+      nix develop --command steps/nix/closure --flake . --dir "$STATE/closure"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: init
+      - name: initrd
+
+  - id: virtiofsd
+    run: nix build .#virtiofsd --out-link "$STATE/virtiofsd"
+
+  - id: render
+    depends: [kernel, qemu, closure, virtiofsd]
+    run: >-
+      nix develop --command steps/qsu/render --name fstests
+      --qemu ${steps.qemu.outputs.qemu}
+      --virtiofsd "$STATE/virtiofsd/bin/virtiofsd"
+      --kernel ${steps.kernel.outputs.kernel}
+      --init ${steps.closure.outputs.init}
+      --initrd ${steps.closure.outputs.initrd}
+      --state "$VM_STATE" --qsu vendor/qemu-system-units
+
+  - id: fstests
+    depends: render
+    timeout_sec: 3600
+    run: >-
+      nix develop --command steps/fstests/run --name fstests
+      --config guest/fstests.config --state "$VM_STATE"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: results
+
+handler_on:
+  exit:
+    run: nix develop --command systemctl --user stop qemu-system@fstests.service

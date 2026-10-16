@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+# Dagu's configuration. Run dagu from this checkout:
+#   dagu --config config.yaml <command>
+# Relative paths resolve from the working directory.
+host: 127.0.0.1
+port: 8086
+auth:
+  mode: none
+skip_examples: true
+paths:
+  dags_dir: dags
+  data_dir: ~/.local/state/kdevops-ng-minimal-dagu/dagu/data
+  log_dir: ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
+  admin_logs_dir: ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs/admin

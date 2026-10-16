@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+{
+  description = "kdevops-ng's bringup on vanilla Dagu: kernel, QEMU, a NixOS closure and fstests";
+
+  inputs = {
+    nixos-flake.url = "github:linux-kdevops/nixos-flake";
+    nixpkgs.follows = "nixos-flake/nixpkgs";
+    # Dagu 2.20 needs Go 1.27, which only unstable has.
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+  };
+
+  outputs =
+    {
+      self,
+      nixpkgs,
+      nixpkgs-unstable,
+      nixos-flake,
+    }:
+    let
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+      toolchain = import "${nixos-flake}/lib/toolchain.nix" { inherit pkgs; };
+      dagu = nixpkgs-unstable.legacyPackages.${system}.callPackage ./nix/dagu.nix { };
+    in
+    {
+      packages.${system} = {
+        inherit dagu;
+        inherit (pkgs) virtiofsd;
+        default = dagu;
+      };
+
+      devShells.${system} = {
+        # Dagu, and the tools the steps that boot the guest run.
+        default = pkgs.mkShell {
+          packages = [
+            dagu
+            pkgs.git
+            pkgs.git-subrepo
+            pkgs.jq
+            pkgs.minijinja
+            pkgs.systemd
+          ];
+        };
+
+        kernel = pkgs.mkShell {
+          # zlib for gendwarfksyms and resolve_btfids' libbpf.
+          packages = toolchain.kernel ++ [
+            pkgs.git
+            pkgs.zlib
+          ];
+          hardeningDisable = [ "all" ];
+          # mkShell derives $out from the working directory and the compiler
+          # wrappers put it in -frandom-seed and -L$out/lib, so pin both for
+          # the build to be the same from any directory and host.
+          shellHook = ''
+            export NIX_CFLAGS_COMPILE="$(sed -E 's,-frandom-seed=[^ ]*,-frandom-seed=reproducible,g' <<< "$NIX_CFLAGS_COMPILE")"
+            export NIX_CFLAGS_COMPILE="''${NIX_CFLAGS_COMPILE//$out//build-shell}"
+            export NIX_LDFLAGS="''${NIX_LDFLAGS//$out//build-shell}"
+          '';
+        };
+
+        # QEMU's configure builds a Python venv offline, from the setuptools,
+        # wheel and pip it finds.
+        qemu = pkgs.mkShell {
+          inputsFrom = [ pkgs.qemu ];
+          packages = [
+            pkgs.git
+            (pkgs.python3.withPackages (ps: [
+              ps.setuptools
+              ps.wheel
+              ps.pip
+            ]))
+          ];
+        };
+      };
+
+      nixosConfigurations.fstests = nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          nixos-flake.nixosModules.backends.imageless
+          nixos-flake.nixosModules.mounts.shares
+          nixos-flake.nixosModules.testSuites.fstests
+          { nixpkgs.overlays = [ nixos-flake.overlays.default ]; }
+          ./guest/fstests.nix
+        ];
+      };
+    };
+}

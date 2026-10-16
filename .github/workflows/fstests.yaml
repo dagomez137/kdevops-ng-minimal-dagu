@@ -68,3 +68,12 @@ jobs:
             ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
             ~/.local/state/qemu-system/fstests/xfstests/results
           if-no-files-found: ignore
+
+      # The tree nix store add-path took, to compare against another host's
+      # build of the same tag byte for byte.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: kernel-${{ matrix.name }}
+          path: ~/.local/state/kdevops-ng-minimal-dagu/linux/out
+          if-no-files-found: ignore

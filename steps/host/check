@@ -2,11 +2,14 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 ## Usage: steps/host/check --output FILE
 ##
-## Print what a run takes from the host: its kernel, CPUs, memory, the free
-## disk under HOME and the Nix store, and /dev/kvm. Append cpus=<count> to
-## FILE and fail unless /dev/kvm is readable and writable:
+## Print what a run takes from the host: its distribution, kernel and
+## hypervisor, CPUs with their frequency governor, memory, the free disk under
+## HOME and the Nix store with its I/O scheduler, KVM's nesting and EPT
+## settings, and /dev/kvm. Append cpus=<count> to FILE and fail unless
+## /dev/kvm is readable and writable:
 ##
-##   nix develop --command steps/host/check --output /dev/stdout
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/host/check --output /dev/stdout
 set -o errexit -o nounset -o pipefail
 
 while [ $# -gt 0 ]; do
@@ -19,13 +22,25 @@ done
 : "${output:?}"
 
 set -o xtrace
-uname --kernel-release --machine
+cat /etc/os-release
+uname --kernel-release --kernel-version --machine
+systemd-detect-virt || true
 lscpu
 free --human
 df --human-readable "$HOME" /nix/store
+# Loop (7) and NBD (43) devices left out. No output from the reads below is
+# a host without the knob, such as a VM with no cpufreq driver.
+lsblk --nodeps --exclude 7,43 --output NAME,SIZE,ROTA,SCHED,MODEL
+cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null |
+	sort | uniq --count || true
+cat /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference 2>/dev/null |
+	sort | uniq --count || true
+grep --with-filename --no-messages . \
+	/sys/module/kvm_intel/parameters/nested /sys/module/kvm_intel/parameters/ept \
+	/sys/module/kvm_amd/parameters/nested /sys/module/kvm_amd/parameters/npt || true
 echo "cpus=$(nproc)" >>"$output"
 if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
-	echo "$USER cannot open /dev/kvm; README.md says what the host needs" >&2
+	echo "$(id --user --name) cannot open /dev/kvm; README.md says what the host needs" >&2
 	exit 1
 fi
 ls --format=long /dev/kvm

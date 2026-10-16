@@ -23,7 +23,13 @@ env:
   - VM_STATE: ${HOME}/.local/state/qemu-system/fstests
 
 steps:
+  - id: host
+    run: nix develop --command steps/host/check --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: cpus
+
   - id: kernel
+    depends: host
     run: >-
       nix develop .#kernel --command steps/kernel/build
       --url ${params.kernel_url} --ref ${params.kernel_ref}
@@ -33,6 +39,7 @@ steps:
       - name: kernel
 
   - id: qemu
+    depends: host
     run: >-
       nix develop .#qemu --command steps/qemu/build
       --url ${params.qemu_url} --ref ${params.qemu_ref} --dir "$STATE/qemu"
@@ -41,6 +48,7 @@ steps:
       - name: qemu
 
   - id: closure
+    depends: host
     run: >-
       nix develop --command steps/nix/closure --flake . --dir "$STATE/closure"
       --output "$DAGU_OUTPUT_FILE"
@@ -49,6 +57,7 @@ steps:
       - name: initrd
 
   - id: virtiofsd
+    depends: host
     run: nix build .#virtiofsd --out-link "$STATE/virtiofsd"
 
   - id: render
@@ -76,4 +85,6 @@ steps:
 
 handler_on:
   exit:
-    run: nix develop --command systemctl --user stop qemu-system@fstests.service
+    run: |
+      nix develop --command systemctl --user stop qemu-system@fstests.service
+      nix develop --command steps/host/check --output /dev/stdout

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/host/check --output FILE
+##
+## Print what a run takes from the host: its kernel, CPUs, memory, the free
+## disk under HOME and the Nix store, and /dev/kvm. Append cpus=<count> to
+## FILE and fail unless /dev/kvm is readable and writable:
+##
+##   nix develop --command steps/host/check --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${output:?}"
+
+set -o xtrace
+uname --kernel-release --machine
+lscpu
+free --human
+df --human-readable "$HOME" /nix/store
+echo "cpus=$(nproc)" >>"$output"
+if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+	echo "$USER cannot open /dev/kvm; README.md says what the host needs" >&2
+	exit 1
+fi
+ls --format=long /dev/kvm

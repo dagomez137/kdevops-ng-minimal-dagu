@@ -38,7 +38,9 @@
             pkgs.git-subrepo
             pkgs.jq
             pkgs.minijinja
+            pkgs.procps
             pkgs.systemd
+            pkgs.util-linux
           ];
         };
 

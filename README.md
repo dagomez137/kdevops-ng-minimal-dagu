@@ -34,7 +34,7 @@ its units under `~/.config/systemd`.
 
 ## Steps
 
-`dags/fstests.yaml` wires five executables under `steps/`. Each takes every
+`dags/fstests.yaml` wires six executables under `steps/`. Each takes every
 input as a long option, prints each command it runs (`set -o xtrace`) and
 appends its result as `name=value` lines to the `--output` file, which is
 Dagu's `$DAGU_OUTPUT_FILE` in a run and `/dev/stdout` by hand. `--help`, or
@@ -42,6 +42,7 @@ any unknown option, prints the usage with a by-hand example:
 
 | Step | Runs in | Result |
 |------|---------|--------|
+| `steps/host/check` | `.#default` | `cpus`; fails without `/dev/kvm` |
 | `steps/kernel/build` | `.#kernel` | `kernel`: a store path with `bzImage` and `lib/modules` |
 | `steps/qemu/build` | `.#qemu` | `qemu`: the `qemu-system-x86_64` binary |
 | `steps/nix/closure` | `.#default` | `init`, `initrd`: from the closure's bootspec |

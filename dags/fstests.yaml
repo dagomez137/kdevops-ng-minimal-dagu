@@ -13,6 +13,8 @@ params:
     default: https://gitlab.com/qemu-project/qemu.git
   - name: qemu_ref
     default: v11.1.2
+  - name: tests
+    default: generic/001 generic/002 generic/003 generic/004 generic/005
 
 env:
   # Dagu hands steps a filtered environment; systemctl --user needs this.
@@ -62,10 +64,11 @@ steps:
 
   - id: fstests
     depends: render
-    timeout_sec: 3600
+    # Leaves a 6 h GitHub job time to build and to upload the results.
+    timeout_sec: 16200
     run: >-
       nix develop --command steps/fstests/run --name fstests
-      --config guest/fstests.config --state "$VM_STATE"
+      --config guest/fstests.config --tests "${params.tests}" --state "$VM_STATE"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: results

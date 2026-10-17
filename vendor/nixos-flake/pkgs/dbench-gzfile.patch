@@ -1,0 +1,38 @@
+diff --git a/child.c b/child.c
+index aea8106..a344855 100644
+--- a/child.c
++++ b/child.c
+@@ -319,7 +319,7 @@ void child_run(struct child_struct *child0, const char *loadfile)
+ 	char **sparams, **params;
+ 	char *p;
+ 	const char *status;
+-	gzFile *gzf;
++	gzFile gzf;
+ 	pid_t parent = getppid();
+ 	double targett;
+ 	struct child_struct *child;
+diff --git a/dbench.c b/dbench.c
+index c8494be..446a284 100644
+--- a/dbench.c
++++ b/dbench.c
+@@ -60,9 +60,9 @@ static double throughput;
+ struct nb_operations *nb_ops;
+ int global_random;
+ 
+-static gzFile *open_loadfile(void)
++static gzFile open_loadfile(void)
+ {
+-	gzFile		*f;
++	gzFile		f;
+ 
+ 	if ((f = gzopen(options.loadfile, "rt")) != NULL)
+ 		return f;
+@@ -246,7 +246,7 @@ static void create_procs(int nprocs, void (*fn)(struct child_struct *, const cha
+ {
+ 	int nclients = nprocs * options.clients_per_process;
+ 	int i;
+-	gzFile *load;
++	gzFile load;
+ 	pid_t *child_pids;
+ 
+ 	load = open_loadfile();

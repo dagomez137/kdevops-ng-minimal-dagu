@@ -9,14 +9,14 @@
 # to bump the version and hash.
 final: prev:
 let
-  version = "2026.03.20";
+  version = "2026.10.15";
 in
 {
   xfstests = prev.xfstests.overrideAttrs (prevAttrs: {
     inherit version;
     src = prev.fetchzip {
       url = "https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git/snapshot/xfstests-dev-v${version}.tar.gz";
-      hash = "sha256-f82TsOEikGo9uQyM0hQmgy6A6R/2U4Ot/eINq34kohM=";
+      hash = "sha256-+AGZhmBLz5nATD8KMn8SHgiWkJ2FbQFL3v2McRvijvk=";
     };
     # Newer xfstests needs pkg-config for autoconf macros.
     nativeBuildInputs = (prevAttrs.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];

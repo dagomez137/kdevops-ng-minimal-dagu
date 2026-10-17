@@ -74,6 +74,10 @@ in
     psmisc
     which
     util-linux
+    # Not behind a _require_command: xfs/281 checks its dump's format,
+    # and some btrfs, ext4 and overlay tests their files' type, with
+    # file(1) and fail without it.
+    file
 
     # Userland utilities individual tests reach for. Each one
     # corresponds to a _require_command guard in xfstests'

@@ -28,8 +28,9 @@ the caller has to be listed there.
 
 **`dagu start` cannot show a step's output live.** It prints step events
 ("Step started", "DAG run finished") and nothing a step writes; that goes
-to the step's log file under `log_dir`, which the fstests step fills while
-the guest runs. The `quick` job's "Run the DAG" printed nothing for 1h19m.
+to the step's log file under `log_dir`, and check's own output to the
+guest's journal and console. The `quick` job's "Run the DAG" printed
+nothing for 1h32m.
 `dagu start` has no option to change this (`--quiet` only removes more).
 
 **A step redirected to a pipe or terminal fails.** A step's `stdout:` or
@@ -56,6 +57,20 @@ skip `Sync()`, or ignore EINVAL, for a redirect that is not a regular
 file. Until then the only live view of a
 step on CI would be the workflow following the log file itself, which the
 CI rule in `CLAUDE.md` forbids.
+
+**A tolerated failure leaves the run partially succeeded.** A failed step
+with `continue_on: failed`, which lets the report run after a failed
+section, ends the DAG `partially_succeeded`, and so does a `dag.run` step
+with `parallel:` once a child has failed, after it has run every item.
+`dagu start` exits 1 on both, but Dagu runs `handler_on.success` on that
+status as on a success. The `judge` step makes `report.md` and the exit
+status say the same thing.
+
+**A section's log is one level down.** `dagu status` shows the `sections`
+step as `subdag: <id>` lines; each section's steps need
+`dagu status --run-id=<run> --sub-run-id=<id> fstests`, and their log
+files sit in `log_dir/run_<time>_<attempt>/`, beside the `fstests/`
+directory of the parent runs, not under the parent's.
 
 **Parallel `nix` calls warn.** Steps started together log "SQLite database
 is busy" from Nix's evaluation cache; the warnings are harmless.
@@ -94,6 +109,14 @@ ask a binary cache for "v7.2.11 with this config". Inside one workflow a
 build job can hand the path to test jobs; across workflows it needs
 kdevops-ng's identity index or a kernel derivation.
 
+**The guest has no readiness signal.** QEMU does not implement
+`sd_notify()`, so `qemu-system@.service` is active as soon as QEMU runs,
+and `steps/qsu/boot` asks the guest over SSH every 5 s until its sshd
+answers, then waits in `systemctl is-system-running --wait`, as
+kdevops-ng's `f/qsu/settle.py` polls. A guest whose systemd sent READY to
+the host over vsock (`vmm.notify_socket`) would let the host unit wait
+instead.
+
 **QEMU is not a GC root.** It is installed into the state directory and
 links against devShell libraries nothing roots, so `nix store gc` can break
 it between runs on a long-lived host.
@@ -101,7 +124,8 @@ it between runs on a long-lived host.
 ## GitHub-hosted runners
 
 **Root setup runs in the workflow.** The first step of
-`.github/workflows/fstests.yaml` opens `/dev/kvm`, lifts Ubuntu's AppArmor
+`.github/workflows/fstests.yaml` opens `/dev/kvm` and `/dev/vhost-vsock`,
+lifts Ubuntu's AppArmor
 restriction on unprivileged user namespaces for virtiofsd's namespace
 sandbox and starts the runner user's systemd manager through lingering. It
 is the one exception to the user-mode rule, scoped in `CLAUDE.md`.
@@ -128,3 +152,17 @@ vfio-user) and state across jobs other than caches and artifacts.
 `virtiofsd@.service` and `virtiofsd@.socket` in `~/.config/systemd/user`
 serve every VM of the user, kdevops-ng's included, so the render step
 writes them only when absent and runs on whatever version is installed.
+
+**Three NVMe drives.** `steps/qsu/render` gives the guest three drives,
+for TEST_DEV, SCRATCH_DEV and LOGWRITES_DEV, so `steps/fstests/render`
+skips the 258 catalog sections that want the realtime or log device on a
+disk of its own, with the reason in its log. Two more drives would run
+them.
+
+**The guest boots degraded.** The fstests module turns on an NFS server
+and the kernel has no NFSD, so the NFSD configuration and RPC pipe
+filesystems fail to mount, `systemctl is-system-running` answers
+`degraded` and `steps/qsu/boot` takes that as booted, as kdevops-ng's
+`f/qsu/settle.py` does; a guest unit that fails for another reason passes
+the same way. Turning the server off in `guest/fstests.nix`, or NFSD on
+in the kernel, would let boot wait for `running`.

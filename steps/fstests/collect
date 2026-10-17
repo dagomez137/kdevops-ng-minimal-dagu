@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/collect --section NAME --share DIR --kver RELEASE
+##            --outcome finished|timed_out|lost --output FILE
+##
+## Read the xunit report check wrote for section NAME under
+## DIR/RELEASE/results/NAME, write the section's summary with its failed and
+## slowest tests next to it as report.md, print it and append
+## verdict=passed|failed to FILE. The section passed when steps/fstests/start
+## saw the run finish, the report is there, a test ran and none failed; a
+## test failed when any of its passes did, and did not run when every pass
+## skipped it. Exit 1 unless it passed. kdevops-ng's f/fstests/collect.py:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/collect --section xfs_bs4k_ss4k \
+##       --share ~/.local/state/qemu-system/fstests/xfstests --kver 7.2.11 \
+##       --outcome finished --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--section | --share | --kver | --outcome | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${section:?} ${share:?} ${kver:?} ${outcome:?} ${output:?}"
+
+dir=$share/$kver/results/$section
+report=$dir/result.xml
+set -o xtrace
+mkdir --parents "$dir"
+if [ "$outcome" != finished ]; then
+	summary="failed: the run was $outcome before check finished"
+elif [ ! -s "$report" ]; then
+	summary='failed: no xunit report, check did not finish'
+else
+	# check writes one <testcase> line per test and pass (common/report), its
+	# <failure> or <skipped> on the lines after it.
+	summary=$(awk '
+		/<testcase / && match($0, / name="[^"]*"/) {
+			name = substr($0, RSTART + 7, RLENGTH - 8)
+			if (!(name in passes)) order[++n] = name
+			passes[name]++
+		}
+		/<failure/ { failed[name] = 1 }
+		/<skipped/ { skipped[name]++ }
+		END {
+			for (i = 1; i <= n; i++) {
+				t = order[i]
+				if (t in failed) { nfail++; fails = fails " " t }
+				else if (skipped[t] == passes[t]) nskip++
+				else npass++
+			}
+			printf "%s: %d tests, %d passed, %d failed, %d not run%s\n",
+				nfail || !npass ? "failed" : "passed", n, npass, nfail, nskip,
+				npass || nfail ? "" : ", none ran"
+			if (nfail) print "Failures:" fails
+		}' "$report")
+	# Each test at its slowest pass.
+	slowest=$(awk '
+		/<testcase / && match($0, / name="[^"]*"/) {
+			name = substr($0, RSTART + 7, RLENGTH - 8)
+			match($0, /time="[^"]*"/); time = substr($0, RSTART + 6, RLENGTH - 7)
+			if (!(name in slow) || time + 0 > slow[name]) slow[name] = time + 0
+		}
+		END { for (name in slow) print slow[name], name }' "$report" |
+		sort --numeric-sort --reverse | sed --quiet 1,10p)
+	summary="$summary"$'\n'"Slowest:"$'\n'"$slowest"
+fi
+verdict=${summary%%:*}
+{
+	echo "### fstests \`$section\`"
+	echo '```'
+	echo "$summary"
+	echo '```'
+} >"$dir/report.md"
+cat "$dir/report.md"
+echo "verdict=$verdict" >>"$output"
+[ "$verdict" = passed ]

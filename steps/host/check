@@ -5,8 +5,8 @@
 ## Print what a run takes from the host: its distribution, kernel and
 ## hypervisor, CPUs with their frequency governor, memory, the free disk under
 ## HOME and the Nix store with its I/O scheduler, KVM's nesting and EPT
-## settings, and /dev/kvm. Append cpus=<count> to FILE and fail unless
-## /dev/kvm is readable and writable:
+## settings, /dev/kvm and /dev/vhost-vsock. Append cpus=<count> to FILE and
+## fail unless both devices are readable and writable:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/host/check --output /dev/stdout
@@ -39,8 +39,10 @@ grep --with-filename --no-messages . \
 	/sys/module/kvm_intel/parameters/nested /sys/module/kvm_intel/parameters/ept \
 	/sys/module/kvm_amd/parameters/nested /sys/module/kvm_amd/parameters/npt || true
 echo "cpus=$(nproc)" >>"$output"
-if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
-	echo "$(id --user --name) cannot open /dev/kvm; README.md says what the host needs" >&2
-	exit 1
-fi
-ls --format=long /dev/kvm
+for dev in /dev/kvm /dev/vhost-vsock; do
+	if [ ! -r "$dev" ] || [ ! -w "$dev" ]; then
+		echo "$(id --user --name) cannot open $dev; README.md says what the host needs" >&2
+		exit 1
+	fi
+done
+ls --format=long /dev/kvm /dev/vhost-vsock

@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/render --catalog FILE --sections NAMES --devices DEVS
+##            --sector BYTES (--groups GROUPS | --tests TESTS) --iterations N
+##            --loop-on-fail N --stop-on-fail true|false --test-timeout SEC
+##            --share DIR --kver RELEASE --output FILE
+##
+## Lay down, on the xfstests share DIR, what xfstests@<section>.service reads
+## for each section in NAMES taken from the config catalog FILE:
+## <section>.config, the section bound to the guest's disks DEVS (TEST_DEV,
+## SCRATCH_DEV, LOGWRITES_DEV on the last disk, and the external rt or log
+## device a section asks for), and <section>.env with HOST_OPTIONS, check's
+## arguments, RECREATE_TEST_DEV and TEST_TIMEOUT. A section the disks cannot
+## hold is skipped with the reason. check runs either GROUPS (-g) or the test
+## list TESTS, or its auto group when both are empty, writes an xunit report
+## and, for N above 1, runs the list N times (-I, or -i when not stopping on
+## failure); -L reruns a failed test N more times. The results an earlier run
+## left under DIR/RELEASE/results for the sections that will run, and the
+## earlier DIR/report.md, are removed. Append share=DIR and sections=<the
+## ones to run> to FILE. kdevops-ng's f/fstests/render_config.py:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/render --catalog guest/xfs.config \
+##       --sections xfs_bs4k_ss4k --devices '/dev/nvme0n1 /dev/nvme1n1 /dev/nvme2n1' \
+##       --sector 512 --tests 'generic/001 generic/002' --iterations 1 \
+##       --loop-on-fail 0 --stop-on-fail true --test-timeout 600 \
+##       --share ~/.local/state/qemu-system/fstests/xfstests --kver 7.2.11 \
+##       --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+groups='' tests=''
+while [ $# -gt 0 ]; do
+	case $1 in
+	--catalog | --sections | --devices | --sector | --groups | --tests | --iterations | \
+		--loop-on-fail | --stop-on-fail | --test-timeout | --share | --kver | --output)
+		opt=${1#--}
+		declare "${opt//-/_}=$2"
+		;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${catalog:?} ${sections:?} ${devices:?} ${sector:?} ${iterations:?} ${loop_on_fail:?}"
+: "${stop_on_fail:?} ${test_timeout:?} ${share:?} ${kver:?} ${output:?}"
+if [ -n "$groups" ] && [ -n "$tests" ]; then
+	echo "--groups and --tests exclude each other: check runs the union of both" >&2
+	exit 2
+fi
+case $stop_on_fail in
+true | false) ;;
+*)
+	echo "--stop-on-fail takes true or false, not '$stop_on_fail'" >&2
+	exit 2
+	;;
+esac
+missing=()
+for section in $sections; do
+	grep --quiet --line-regexp --fixed-strings "[$section]" "$catalog" || missing+=("$section")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+	echo "not in $catalog: ${missing[*]}" >&2
+	exit 1
+fi
+
+# fstests' check takes short options only.
+args=()
+if [ -n "$groups" ]; then
+	args+=(-g "${groups// /,}")
+elif [ -z "$tests" ]; then
+	echo "no groups and no tests: check runs its auto group"
+fi
+args+=(-R xunit)
+if [ "$iterations" -gt 1 ]; then
+	if [ "$stop_on_fail" = true ]; then args+=(-I "$iterations"); else args+=(-i "$iterations"); fi
+fi
+if [ "$loop_on_fail" -gt 0 ]; then
+	args+=(-L "$loop_on_fail")
+fi
+read -r -a list <<<"$tests"
+args+=("${list[@]}")
+
+read -r -a devs <<<"$devices"
+set -o xtrace
+mkdir --parents "$share"
+rm --force "$share/report.md"
+run=()
+for section in $sections; do
+	block=$(awk --assign want="[$section]" '/^\[/ { on = ($0 == want) } on' "$catalog")
+	mkfs=$(sed --quiet 's/^MKFS_OPTIONS=//p' <<<"$block")
+	bsize=$(grep --only-matching --perl-regexp '(?<=-b size=)[0-9]+' <<<"$mkfs" || echo 4096)
+	ssize=$(grep --only-matching --perl-regexp '(?<=-s size=)[0-9]+' <<<"$mkfs" || echo "$sector")
+	mapfile -t externals < <(grep --only-matching --extended-regexp \
+		'^(TEST_RTDEV|SCRATCH_RTDEV|TEST_LOGDEV|SCRATCH_LOGDEV)=$' <<<"$block" | tr --delete =)
+	need=$((2 + ${#externals[@]} + 1))
+	reason=''
+	if [ "$bsize" -lt "$sector" ] || [ "$ssize" -lt "$sector" ]; then
+		reason="block $bsize or sector $ssize < device sector $sector"
+	elif [[ $mkfs == *crc=0* ]] && [ "$bsize" -gt 4096 ]; then
+		reason="V4 (crc=0) block $bsize > page size 4096"
+	elif [ "${#devs[@]}" -lt "$need" ]; then
+		reason="needs $need devices for TEST_DEV, SCRATCH_DEV, ${externals[*]:+${externals[*]}, }LOGWRITES_DEV; have ${#devs[@]}"
+	fi
+	if [ -n "$reason" ]; then
+		echo "skipped $section: $reason"
+		continue
+	fi
+	# The last disk takes dm-log-writes' replay log; the rest bind in order.
+	{
+		for i in "${!externals[@]}"; do
+			block=$(sed "s|^${externals[i]}=\$|${externals[i]}=${devs[2 + i]}|" <<<"$block")
+		done
+		echo "$block"
+		echo "TEST_DEV=${devs[0]}"
+		echo "TEST_DIR=/media/test"
+		echo "SCRATCH_MNT=/media/scratch"
+		if [ "${#externals[@]}" -eq 0 ] && [ "${#devs[@]}" -gt 3 ]; then
+			echo "SCRATCH_DEV_POOL=\"${devs[*]:1:${#devs[@]}-2}\""
+		else
+			echo "SCRATCH_DEV=${devs[1]}"
+		fi
+		echo "LOGWRITES_DEV=${devs[-1]}"
+	} >"$share/$section.config"
+	{
+		echo "HOST_OPTIONS=/var/lib/xfstests/$section.config"
+		echo "XFSTESTS_CHECK_ARGS=${args[*]}"
+		echo "RECREATE_TEST_DEV=true"
+		echo "TEST_TIMEOUT=$test_timeout"
+	} >"$share/$section.env"
+	echo "wrote $share/$section.config $share/$section.env"
+	rm --recursive --force "${share:?}/${kver:?}/results/${section:?}"
+	run+=("$section")
+done
+if [ "${#run[@]}" -eq 0 ]; then
+	echo "every section was skipped" >&2
+	exit 1
+fi
+{
+	echo "share=$share"
+	echo "sections=${run[*]}"
+} >>"$output"

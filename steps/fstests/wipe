@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/wipe --key FILE --cid CID --devices DEVS
+##
+## Before a section, unmount each of the guest's disks DEVS, clear its
+## signatures and discard its blocks, so the section starts from empty disks.
+## Only the discard has to succeed. kdevops-ng's f/fstests/wipe.py:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/wipe \
+##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242 \
+##       --devices '/dev/nvme0n1 /dev/nvme1n1 /dev/nvme2n1'
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--key | --cid | --devices) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${key:?} ${cid:?} ${devices:?}"
+
+ssh=("$(dirname "$0")/../qsu/ssh" --key "$key" --cid "$cid" --)
+set -o xtrace
+for dev in $devices; do
+	"${ssh[@]}" umount "$dev" || true
+	"${ssh[@]}" wipefs --all "$dev" || true
+	"${ssh[@]}" blkdiscard --force "$dev"
+done

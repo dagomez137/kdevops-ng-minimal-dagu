@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/qsu/console --name VM --since-file FILE --file PATH
+##
+## Write what qemu-system@VM.service printed since FILE was created, from
+## the journal, to PATH: the guest's console, with its kernel messages and
+## check's output, for a guest that crashed or hung. FILE is the run's own
+## log, which Dagu names in DAG_RUN_LOG_FILE, so the console is this run's:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/qsu/console --name fstests \
+##       --since-file ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs/fstests/dag-run_*/dag-run_*.log \
+##       --file ~/.local/state/qemu-system/fstests/xfstests/console.log
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--name | --since-file | --file)
+		opt=${1#--}
+		declare "${opt//-/_}=$2"
+		;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${name:?} ${since_file:?} ${file:?}"
+
+set -o xtrace
+since=$(stat --format=%W "$since_file")
+if [ "$since" -eq 0 ]; then
+	echo "$since_file has no birth time, taking its last change" >&2
+	since=$(stat --format=%Y "$since_file")
+fi
+journalctl --user-unit "qemu-system@$name.service" --since "@$since" \
+	--output cat --no-pager >"$file"
+echo "wrote $file"

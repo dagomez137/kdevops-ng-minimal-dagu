@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/report --sections NAMES --share DIR --kver RELEASE
+##
+## Join the summaries steps/fstests/collect wrote for each section in NAMES
+## under DIR/RELEASE/results into DIR/report.md and print it. A section with
+## no summary did not get as far as collect. kdevops-ng's
+## f/fstests/report.py:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/report --sections xfs_bs4k_ss4k \
+##       --share ~/.local/state/qemu-system/fstests/xfstests --kver 7.2.11
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--sections | --share | --kver) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${sections:?} ${share:?} ${kver:?}"
+
+set -o xtrace
+for section in $sections; do
+	summary=$share/$kver/results/$section/report.md
+	if [ -s "$summary" ]; then
+		cat "$summary"
+	else
+		printf '### fstests `%s`\n```\nfailed: never collected\n```\n' "$section"
+	fi
+done >"$share/report.md"
+cat "$share/report.md"

@@ -19,9 +19,11 @@ jobs:
       matrix:
         include:
           - name: smoke
+            groups: ""
             tests: generic/001 generic/002 generic/003 generic/004 generic/005
           - name: quick
-            tests: -g quick
+            groups: quick
+            tests: ""
     name: fstests (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v5
@@ -29,11 +31,14 @@ jobs:
       - name: Prepare the runner (root)
         run: |
           set -o xtrace
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+          sudo modprobe vhost_vsock
+          printf '%s\n' \
+            'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            'KERNEL=="vhost-vsock", GROUP="kvm", MODE="0666", OPTIONS+="static_node=vhost-vsock"' |
             sudo tee /etc/udev/rules.d/99-kvm.rules
           sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          ls --format=long /dev/kvm
+          sudo udevadm trigger --name-match=kvm --name-match=vhost-vsock
+          ls --format=long /dev/kvm /dev/vhost-vsock
           # virtiofsd's namespace sandbox maps the runner user to root in a
           # user namespace, which Ubuntu's AppArmor refuses by default.
           sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
@@ -49,7 +54,7 @@ jobs:
         run: >-
           nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
           --command dagu --config config.yaml start fstests --
-          "tests=${{ matrix.tests }}"
+          "groups=${{ matrix.groups }}" "tests=${{ matrix.tests }}"
 
       - name: Show the run
         if: always()
@@ -69,7 +74,7 @@ jobs:
           name: fstests-${{ matrix.name }}
           path: |
             ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
-            ~/.local/state/qemu-system/fstests/xfstests/results
+            ~/.local/state/qemu-system/fstests/xfstests
           if-no-files-found: ignore
 
       # The tree nix store add-path took, to compare against another host's

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/start --key FILE --cid CID --section NAME --share DIR
+##            --kver RELEASE --timeout SEC --output FILE
+##
+## Run fstests' section NAME in the guest: remove the section's previous
+## xunit report from the xfstests share DIR, start xfstests@NAME.service and
+## return when check has finished. The unit is a oneshot, so systemctl start
+## waits for it; check's verdict is the report under DIR/RELEASE/results/NAME,
+## read by steps/fstests/collect. Append outcome=<how the wait ended> to
+## FILE: finished when the start job ended, whatever check's exit status;
+## timed_out when it had not ended after SEC seconds, in which case the unit
+## is stopped; lost when the guest stopped answering. kdevops-ng's
+## f/fstests/start.py, wait.py and stop.py:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/start \
+##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242 \
+##       --section xfs_bs4k_ss4k --share ~/.local/state/qemu-system/fstests/xfstests \
+##       --kver 7.2.11 --timeout 16200 --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--key | --cid | --section | --share | --kver | --timeout | --output)
+		declare "${1#--}=$2"
+		;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${key:?} ${cid:?} ${section:?} ${share:?} ${kver:?} ${timeout:?} ${output:?}"
+
+ssh=("$(dirname "$0")/../qsu/ssh" --key "$key" --cid "$cid" --)
+unit=xfstests@$section.service
+set -o xtrace
+rm --force "${share:?}/${kver:?}/results/${section:?}/result.xml"
+status=0
+timeout --kill-after=30 "$timeout" "${ssh[@]}" systemctl start "$unit" || status=$?
+# systemctl start exits 1 when the job ended with the unit failed, 124 is
+# timeout's own status and 255 is ssh's.
+case $status in
+0 | 1) outcome=finished ;;
+124)
+	outcome=timed_out
+	"${ssh[@]}" systemctl stop "$unit" || true
+	;;
+*) outcome=lost ;;
+esac
+echo "$section: $outcome, systemctl start exited $status"
+echo "outcome=$outcome" >>"$output"

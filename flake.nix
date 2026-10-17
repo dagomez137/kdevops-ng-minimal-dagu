@@ -53,6 +53,7 @@
             pkgs.jq
             pkgs.minijinja
             pkgs.nix
+            pkgs.openssh
             pkgs.procps
             pkgs.systemd
             pkgs.util-linux

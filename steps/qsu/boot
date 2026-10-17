@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/qsu/boot --name VM --state DIR --key FILE --cid CID
+##            [--timeout SEC]
+##
+## Recreate the empty NVMe drives DIR/vars.json names, start
+## qemu-system@VM.service and wait until the guest's systemd has finished
+## starting up, as seen over SSH with the private key FILE at vsock CID CID.
+## A guest that comes up degraded counts as up, as kdevops-ng's f/qsu/settle
+## has it. Fail after SEC seconds (default 240) without an answer:
+##
+##   nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+##       --command steps/qsu/boot --name fstests \
+##       --state ~/.local/state/qemu-system/fstests \
+##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242
+set -o errexit -o nounset -o pipefail
+
+timeout=240
+while [ $# -gt 0 ]; do
+	case $1 in
+	--name | --state | --key | --cid | --timeout) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${name:?} ${state:?} ${key:?} ${cid:?}"
+
+set -o xtrace
+mapfile -t drives < <(jq --raw-output '.nvme.drives[].file' "$state/vars.json")
+rm --force "${drives[@]}"
+truncate --size 16G "${drives[@]}"
+systemctl --user restart "qemu-system@$name.service"
+
+# QEMU does not notify systemd when the guest is up, so ask the guest until
+# its vsock sshd answers; is-system-running --wait then blocks until startup
+# has finished, within what is left of the timeout. As kdevops-ng's
+# f/qsu/settle.
+ssh=("$(dirname "$0")/ssh" --key "$key" --cid "$cid" --connect-timeout 5 --)
+deadline=$((SECONDS + timeout))
+until state=$(timeout "$((deadline > SECONDS ? deadline - SECONDS : 1))" \
+	"${ssh[@]}" systemctl is-system-running --wait); do
+	case $state in
+	degraded) break ;;
+	esac
+	systemctl --user is-active --quiet "qemu-system@$name.service"
+	[ "$SECONDS" -lt "$deadline" ]
+	sleep 5
+done
+echo "$name: $state"

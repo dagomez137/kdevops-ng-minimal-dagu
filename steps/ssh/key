@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/ssh/key --dir DIR --output FILE
+##
+## Make the ed25519 key pair that reaches every guest, DIR/id_ed25519 and its
+## .pub, unless it is already there, and append key=<private key> to FILE:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/ssh/key \
+##       --dir ~/.local/state/kdevops-ng-minimal-dagu/ssh --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--dir | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${dir:?} ${output:?}"
+
+set -o xtrace
+if [ ! -e "$dir/id_ed25519" ]; then
+	mkdir --parents "$dir"
+	ssh-keygen -t ed25519 -N "" -C kdevops-vm -f "$dir/id_ed25519"
+fi
+echo "key=$dir/id_ed25519" >>"$output"

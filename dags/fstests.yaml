@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 description: >-
   Build a kernel, QEMU and the fstests NixOS closure, boot them as
-  qemu-system@fstests.service and run fstests on two NVMe drives.
+  qemu-system@fstests.service and run each fstests section as
+  xfstests@<section>.service on three NVMe drives.
 working_dir: ..
 
 params:
@@ -13,8 +14,26 @@ params:
     default: https://gitlab.com/qemu-project/qemu.git
   - name: qemu_ref
     default: v11.1.2
+  # Sections of guest/xfs.config, run one after the other.
+  - name: sections
+    default: xfs_bs4k_ss4k
+  # fstests groups (-g) or a test list; set one, empty the other.
+  - name: groups
+    default: ""
   - name: tests
     default: generic/001 generic/002 generic/003 generic/004 generic/005
+  - name: iterations
+    type: integer
+    default: 1
+  - name: loop_on_fail
+    type: integer
+    default: 0
+  - name: stop_on_fail
+    default: "true"
+  # Seconds a single test may run before systemd kills it.
+  - name: test_timeout
+    type: integer
+    default: 600
 
 env:
   # Dagu hands steps a filtered environment; systemctl --user needs this.
@@ -65,8 +84,16 @@ steps:
     depends: host
     run: nix build .#virtiofsd --out-link "$STATE/virtiofsd"
 
+  - id: key
+    depends: host
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/ssh/key --dir "$STATE/ssh" --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: key
+
   - id: render
-    depends: [kernel, qemu, closure, virtiofsd]
+    depends: [kernel, qemu, closure, virtiofsd, key]
     run: >-
       nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
       --command steps/qsu/render --name fstests
@@ -75,25 +102,145 @@ steps:
       --kernel ${steps.kernel.outputs.kernel}
       --init ${steps.closure.outputs.init}
       --initrd ${steps.closure.outputs.initrd}
+      --key ${steps.key.outputs.key}
       --state "$VM_STATE" --qsu vendor/qemu-system-units
-
-  - id: fstests
-    depends: render
-    # Leaves a 6 h GitHub job time to build and to upload the results.
-    timeout_sec: 16200
-    run: >-
-      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
-      --command steps/fstests/run --name fstests
-      --config guest/fstests.config --tests "${params.tests}" --state "$VM_STATE"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
-      - name: results
-      - name: report
+      - name: cid
 
+  - id: boot
+    depends: render
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+      --command steps/qsu/boot --name fstests --state "$VM_STATE"
+      --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid}
+
+  - id: discover
+    depends: boot
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/discover
+      --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid}
+      --tests "${params.tests}" --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: kver
+      - name: devices
+      - name: sector
+
+  - id: configure
+    depends: discover
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/render --catalog guest/xfs.config
+      --sections "${params.sections}" --devices "${steps.discover.outputs.devices}"
+      --sector ${steps.discover.outputs.sector}
+      --groups "${params.groups}" --tests "${params.tests}"
+      --iterations ${params.iterations} --loop-on-fail ${params.loop_on_fail}
+      --stop-on-fail ${params.stop_on_fail} --test-timeout ${params.test_timeout}
+      --share "$VM_STATE/xfstests" --kver ${steps.discover.outputs.kver}
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: share
+      - name: sections
+
+  # One section at a time, each a run of the section DAG below; a failed
+  # section does not stop the next, and judge fails the run.
+  - id: sections
+    depends: configure
+    action: dag.run
+    with:
+      dag: section
+      params:
+        section: ${ITEM}
+        key: ${steps.key.outputs.key}
+        cid: ${steps.render.outputs.cid}
+        devices: ${steps.discover.outputs.devices}
+        kver: ${steps.discover.outputs.kver}
+        share: ${steps.configure.outputs.share}
+    parallel:
+      items: ${steps.configure.outputs.sections}
+      max_concurrent: 1
+    continue_on: failed
+
+  - id: report
+    depends: sections
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/report --sections "${steps.configure.outputs.sections}"
+      --share "$VM_STATE/xfstests" --kver ${steps.discover.outputs.kver}
+
+  - id: judge
+    depends: report
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/judge --report "$VM_STATE/xfstests/report.md"
+
+# Stop the guest, keep its console for a crash or hang, and show what the
+# host looks like after the run.
 handler_on:
   exit:
     run: |
       nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
         --command systemctl --user stop qemu-system@fstests.service
       nix develop --ignore-env --keep-env-var HOME \
+        --command steps/qsu/console --name fstests --since-file "$DAG_RUN_LOG_FILE" \
+        --file "$VM_STATE/xfstests/console.log"
+      nix develop --ignore-env --keep-env-var HOME \
         --command steps/host/check --output /dev/stdout
+
+---
+name: section
+description: >-
+  Run one fstests section in the booted guest: wipe the disks, prepare the
+  mount points, run xfstests@<section>.service and read its xunit report.
+working_dir: ..
+
+params:
+  - name: section
+    description: the guest/xfs.config section to run
+  - name: key
+    description: the private key that reaches the guest
+  - name: cid
+    description: the guest's vsock CID
+  - name: devices
+    description: the guest's NVMe disks, in order
+  - name: kver
+    description: the guest's kernel release
+  - name: share
+    description: the xfstests share, with the section's config and results
+
+steps:
+  - id: wipe
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/wipe --key ${params.key} --cid ${params.cid}
+      --devices "${params.devices}"
+
+  - id: prepare
+    depends: wipe
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/prepare --key ${params.key} --cid ${params.cid}
+      --section ${params.section} --share ${params.share}
+
+  # The section's own deadline, 4.5 h: what a 6 h GitHub job has left after
+  # the builds and before the upload. start stops the unit when it passes.
+  - id: start
+    depends: prepare
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/start --key ${params.key} --cid ${params.cid}
+      --section ${params.section} --share ${params.share} --kver ${params.kver}
+      --timeout 16200 --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: outcome
+
+  - id: collect
+    depends: start
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/collect --section ${params.section}
+      --share ${params.share} --kver ${params.kver}
+      --outcome ${steps.start.outputs.outcome} --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: verdict

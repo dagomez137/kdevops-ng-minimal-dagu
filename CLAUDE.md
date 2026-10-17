@@ -7,10 +7,10 @@ it runs.
 
 ## Scope
 
-The fast path only. One DAG, one guest, one test list, no reuse, no peers,
-no form beyond the four source parameters. A setting is a constant in the
-file that uses it until a second value is needed. Dagu stays vanilla: a gap
-in Dagu is recorded, not patched.
+The fast path only. One DAG, one guest, no reuse, no peers, no form beyond
+the DAG's parameters: the sources, the sections and what check runs. A
+setting is a constant in the file that uses it until a second value is
+needed. Dagu stays vanilla: a gap in Dagu is recorded, not patched.
 
 ## Rules (from kdevops-ng, never bypassed)
 
@@ -23,9 +23,10 @@ only to this project's state directories and `~/.config/systemd`, and every
 command a step runs printed so it can be replayed by hand.
 
 A step is a standalone executable under `steps/<subsystem>/<verb>`: long
-options for every input, nothing read from the environment but `HOME`,
-`set -o xtrace` for the log, `name=value` results to the `--output` file.
-The DAG only wires steps.
+options for every input, nothing read from the environment but `HOME` (and
+`XDG_RUNTIME_DIR`, which `systemctl --user` needs), `set -o xtrace` for
+the log, `name=value` results to the `--output` file. The DAG only wires
+steps.
 
 CI is dumb: `.github/workflows/` prepares the host, runs the same
 `dagu start` and `dagu status` a developer runs locally and collects files

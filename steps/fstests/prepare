@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/prepare --key FILE --cid CID --section NAME --share DIR
+##
+## Load the filesystem driver section NAME tests and create its TEST_DIR and
+## SCRATCH_MNT in the guest, both on the guest's tmpfs root, from the
+## section's config on the xfstests share DIR. Formatting and mounting are
+## check's own work (RECREATE_TEST_DEV). kdevops-ng's f/fstests/prepare.py:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/prepare \
+##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242 \
+##       --section xfs_bs4k_ss4k --share ~/.local/state/qemu-system/fstests/xfstests
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--key | --cid | --section | --share) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${key:?} ${cid:?} ${section:?} ${share:?}"
+
+config=$share/$section.config
+value() { sed --quiet "s/^$1=//p" "$config"; }
+ssh=("$(dirname "$0")/../qsu/ssh" --key "$key" --cid "$cid" --)
+set -o xtrace
+"${ssh[@]}" modprobe "$(value FSTYP)" || true
+"${ssh[@]}" mkdir --parents "$(value TEST_DIR)" "$(value SCRATCH_MNT)"

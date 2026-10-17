@@ -12,8 +12,16 @@
 # dies with "so_dot_version does not exist". Restore the custom install-sh after
 # configure and patch its shebang. Harmless for the tarball (same file), decisive
 # for a git src.
+#
+# The release follows the kernel's: xfsprogs 6.19 has no `xfs_io healthmon`,
+# which the XFS health monitor tests in xfstests need, so take 7.2.0.
 final: prev: {
-  xfsprogs = prev.xfsprogs.overrideAttrs (prevAttrs: {
+  xfsprogs = prev.xfsprogs.overrideAttrs (prevAttrs: rec {
+    version = "7.2.0";
+    src = prev.fetchurl {
+      url = "mirror://kernel/linux/utils/fs/xfs/xfsprogs/xfsprogs-${version}.tar.xz";
+      hash = "sha256-UB36NjzY4ZmXpKGnH3De2IJBtF6dsjPoh1wjuAUgzIM=";
+    };
     postConfigure = (prevAttrs.postConfigure or "") + ''
       cp -f include/install-sh install-sh
       patchShebangs install-sh include/install-sh

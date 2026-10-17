@@ -82,12 +82,17 @@ in
     # the recipe breaks this build instead of silently dropping the fix. The
     # proper home for this is the recipe's wrapperScript; drop on the nixpkgs
     # bump that carries it.
+    #
+    # nixpkgs' coreutils is one multi-call binary that picks its program by
+    # the name it runs under, so generic/452's copy of ls, ls_on_scratch, is
+    # no ls at all. Put coreutils built as separate programs first in PATH.
     postInstall = (prevAttrs.postInstall or "") + ''
       install -D --mode=0444 doc/group-names.txt $out/lib/xfstests/doc/group-names.txt
       substituteInPlace $out/bin/xfstests-check --replace-fail \
         'exec ./check "$@"' \
         'rm tests
       cp --recursive --symbolic-link --no-preserve=mode '"$out"'/lib/xfstests/tests tests
+      export PATH=${prev.coreutils.override { singleBinary = false; }}/bin:$PATH
       exec ./check "$@"'
     '';
   });

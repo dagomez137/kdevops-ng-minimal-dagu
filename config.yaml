@@ -12,3 +12,7 @@ paths:
   data_dir: ~/.local/state/kdevops-ng-minimal-dagu/dagu/data
   log_dir: ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
   admin_logs_dir: ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs/admin
+  # Neither follows admin_logs_dir: Dagu keeps its event store under
+  # ~/.local/share/dagu and creates ~/.config/dagu for the base config.
+  event_store_dir: ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs/admin/events
+  base_config: ~/.local/state/kdevops-ng-minimal-dagu/dagu/base.yaml

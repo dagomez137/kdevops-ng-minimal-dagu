@@ -72,6 +72,11 @@ step as `subdag: <id>` lines; each section's steps need
 files sit in `log_dir/run_<time>_<attempt>/`, beside the `fstests/`
 directory of the parent runs, not under the parent's.
 
+**Two paths do not follow `admin_logs_dir`.** Dagu kept its event store
+under `~/.local/share/dagu/logs/admin/events` and makes `~/.config/dagu`
+for its base configuration on every command, so `config.yaml` sets
+`event_store_dir` and `base_config` as well.
+
 **Parallel `nix` calls warn.** Steps started together log "SQLite database
 is busy" from Nix's evaluation cache; the warnings are harmless.
 

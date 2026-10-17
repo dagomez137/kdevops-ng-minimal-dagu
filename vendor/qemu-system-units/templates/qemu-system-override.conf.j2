@@ -15,10 +15,6 @@ After=virtiofsd@%i-{{ share.tag }}.socket
 Requires=virtiofsd@%i-{{ share.tag }}.service
 {% endfor %}
 {% endif %}
-{% for dev in pci_passthrough | default([]) %}
-Requires=vfio-bind@{{ dev.addr }}.service
-After=vfio-bind@{{ dev.addr }}.service
-{% endfor %}
 
 [Service]
 {% if qemu_binary is defined %}
@@ -47,6 +43,11 @@ Environment="QEMU_EXTRA_ARGS=
 {%- endif -%}
 {%- if not autostart | default(true) -%}
 {{- " " }}-S
+{%- endif -%}
+{#- Free-form flags last, so an operator's device can reference anything the
+    composed command line defines above it (a chardev, a bus, an object). #}
+{%- if extra_qemu_args | default("") | trim -%}
+{{- " " }}{{ extra_qemu_args | trim }}
 {%- endif -%}
 "
 {# Override the base registration with one that carries vSockCid.

@@ -31,6 +31,18 @@ systemd-analyze verify <rendered>/qemu-system@.service
 systemd-analyze verify <rendered>/virtiofsd@.socket <rendered>/virtiofsd@.service
 ```
 
+Render the udev rule with a device in `pci_passthrough` and check it
+with `udevadm verify`, which catches an unknown key or a malformed
+match:
+
+```shell
+minijinja-cli --trim-blocks \
+  --define 'pci_passthrough:=[{"addr": "0000:2d:00.0"}]' \
+  --output <rendered>/10-vfio-kvm.rules \
+  templates/vfio-udev.rules.j2 vars/example.yaml
+udevadm verify <rendered>/10-vfio-kvm.rules
+```
+
 ## 3. Review the security posture — `systemd-analyze security`
 
 Why: the service units ship unhardened by design (see
@@ -56,5 +68,6 @@ What: `bash -n <rendered>/transient-run.sh` after rendering it.
 Why: the project enforces strict commit conventions (see CLAUDE.md).
 
 What: subject in imperative mood; body in plain-English paragraphs,
-never bullet lists; `Generated-by:` immediately followed by
-`Signed-off-by:` with no blank line between them.
+never bullet lists; `Assisted-by:` ahead of the closing
+`Signed-off-by:`, and every `Co-developed-by:` immediately followed by
+that person's `Signed-off-by:`.

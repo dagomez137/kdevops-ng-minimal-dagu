@@ -44,7 +44,8 @@ set -o xtrace
 hash=$(printf '%s' "$name" | sha256sum)
 cid=$((100 + 16#${hash:0:8} % 9973))
 credential=$(base64 --wrap=0 "$key.pub")
-mkdir --parents "$state"
+# virtiofsd refuses to start on a missing shared directory, and the VM with it.
+mkdir --parents "$state/xfstests"
 vars=$state/vars.json
 jq --null-input --arg name "$name" --arg qemu "$qemu" --arg virtiofsd "$virtiofsd" \
 	--arg kernel "$kernel" --arg init "$init" --arg initrd "$initrd" --arg state "$state" \

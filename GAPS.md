@@ -7,18 +7,12 @@ log, not here.
 
 ## Upstream projects
 
-**qemu-system-units cannot pass extra QEMU flags.** The per-VM override
-template owns `QEMU_EXTRA_ARGS` (virtiofs, console) and has no variable for
-more, so the guest runs without `-no-reboot`. A guest that panics or hangs
-sits until the fstests step's 4.5 h timeout, and a guest kernel set to
-reboot on panic would boot and start the tests again. Close it upstream
-with an `extra_qemu_args` list in the vars file.
-
-**nixos-flake lags kdevops-ng's vendored copy.** Upstream has no
-`xfstests@` unit and none of kdevops-ng's xfstests and xfsprogs overlays,
-so `vendor/nixos-flake` is a copy of kdevops-ng's subrepo, not of upstream.
-Close it with `git subrepo push` from kdevops-ng, then a `git subrepo pull`
-here. Neither copy's kernel toolchain has zlib (gendwarfksyms,
+**nixos-flake and qemu-system-units lag kdevops-ng's vendored copies.**
+Upstream nixos-flake has no `xfstests@` unit and none of kdevops-ng's
+xfstests and xfsprogs overlays, and upstream qemu-system-units has no
+`extra_qemu_args` (`-no-reboot`), so both `vendor/` trees are copies of
+kdevops-ng's subrepos, not of upstream. Close it with `git subrepo push`
+from kdevops-ng, then a `git subrepo pull` here. Neither copy's kernel toolchain has zlib (gendwarfksyms,
 resolve_btfids), which the `kernel` devShell adds.
 
 **Dagu is not in nixpkgs.** `nix/dagu.nix` builds it from source, web UI

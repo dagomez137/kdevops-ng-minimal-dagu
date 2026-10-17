@@ -1,0 +1,63 @@
+From 093c49cf8d65f278690ab6346c1d4957474bbbc9 Mon Sep 17 00:00:00 2001
+From: Daniel Gomez <da.gomez@kernel.org>
+Date: Sat, 17 Oct 2026 17:49:04 +0200
+Subject: [PATCH] xfsdump: copy directory entry names past the dh_name stub
+
+dump_dirent() sizes each directory entry record for its name and then
+strcpy()s the name into dh_name, a 6 byte (8 in the v1 header) stub at
+the end of the header that the name is meant to run past. Built with
+_FORTIFY_SOURCE=3, as distributions such as NixOS do by default, glibc
+checks the copy against the member's size and aborts the dump with
+"*** buffer overflow detected ***" on the first name longer than five
+characters, which fails most of the xfsdump tests in fstests.
+
+Copy the name with memcpy() to its offset in the record instead, so the
+bound is the record the caller sized rather than the stub.
+
+Assisted-by: LLM
+Signed-off-by: Daniel Gomez <da.gomez@kernel.org>
+---
+ dump/content.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/dump/content.c b/dump/content.c
+index 6462267..2bcdd54 100644
+--- a/dump/content.c
++++ b/dump/content.c
+@@ -5151,14 +5151,14 @@ dump_dirent(drive_t *drivep,
+ 		dhdrp->dh_sz = (uint16_t)sz;
+ 		dhdrp->dh_gen = (uint16_t)(gen & DENTGENMASK);
+ 		if (name) {
+-			strcpy(dhdrp->dh_name, name);
++			memcpy((char *)dhdrp + name_offset, name, namelen + 1);
+ 		}
+ 
+ 		dhdrp->dh_checksum = calc_checksum(dhdrp, DIRENTHDR_SZ);
+ 
+ 		xlate_direnthdr_v1(dhdrp, tmpdhdrp, 1);
+ 		if (name) {
+-			strcpy(tmpdhdrp->dh_name, name);
++			memcpy((char *)tmpdhdrp + name_offset, name, namelen + 1);
+ 		}
+ 	} else {
+ 		direnthdr_t *dhdrp = (direnthdr_t *)contextp->cc_mdirentbufp;
+@@ -5169,14 +5169,14 @@ dump_dirent(drive_t *drivep,
+ 		dhdrp->dh_gen = gen;
+ 		dhdrp->dh_sz = (uint16_t)sz;
+ 		if (name) {
+-			strcpy(dhdrp->dh_name, name);
++			memcpy((char *)dhdrp + name_offset, name, namelen + 1);
+ 		}
+ 
+ 		dhdrp->dh_checksum = calc_checksum(dhdrp, DIRENTHDR_SZ);
+ 
+ 		xlate_direnthdr(dhdrp, tmpdhdrp, 1);
+ 		if (name) {
+-			strcpy(tmpdhdrp->dh_name, name);
++			memcpy((char *)tmpdhdrp + name_offset, name, namelen + 1);
+ 		}
+ 	}
+ 
+-- 
+2.53.0
+

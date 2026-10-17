@@ -59,11 +59,15 @@ in
     # device is initialised on its first run. Queued for xfstests upstream; drop
     # on the version bump that includes it.
     #
-    # xfsprogs installs xfs_healer under its own libexec, where common/config's
-    # /usr/libexec fallback cannot find it.
+    # The recipe rewrites every /bin/true to a bare `true`, which in xfs/031's
+    # mkfs protofile is a file to copy in, so mkfs fails to open it and the
+    # test is skipped; give it coreutils' true. xfsprogs installs xfs_healer
+    # under its own libexec, where common/config's /usr/libexec fallback
+    # cannot find it.
     patchPhase = (prevAttrs.patchPhase or "") + ''
       patch -p1 < ${./xfstests-runtime-max-sec.patch}
       patch -p1 < ${./xfstests-recreate-test-dev-bootstrap.patch}
+      substituteInPlace tests/xfs/031 --replace-fail ' 3 1 true' ' 3 1 ${prev.coreutils}/bin/true'
       substituteInPlace common/config \
         --replace-fail /usr/libexec/xfsprogs ${final.xfsprogs.out}/libexec/xfsprogs
     '';

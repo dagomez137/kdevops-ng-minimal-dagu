@@ -91,6 +91,8 @@ in
     fsverity-utils
     man-db
     thin-provisioning-tools
+    # generic/241 runs it.
+    dbench
 
     # checkbashisms flags /bin/sh portability slips against the
     # xfsprogs source tree. xfstests' auto-bashisms tests skip

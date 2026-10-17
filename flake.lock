@@ -5,18 +5,14 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1781254584,
-        "narHash": "sha256-FATvMwObQyxlamfBqpxG/E5GpddqDR6ZYi5braGcm8U=",
-        "owner": "linux-kdevops",
-        "repo": "nixos-flake",
-        "rev": "b599d320b12a3b320ab825e97d97d6bef6467c34",
-        "type": "github"
+        "path": "./vendor/nixos-flake",
+        "type": "path"
       },
       "original": {
-        "owner": "linux-kdevops",
-        "repo": "nixos-flake",
-        "type": "github"
-      }
+        "path": "./vendor/nixos-flake",
+        "type": "path"
+      },
+      "parent": []
     },
     "nixpkgs": {
       "locked": {

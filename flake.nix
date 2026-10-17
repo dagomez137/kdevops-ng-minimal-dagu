@@ -3,7 +3,7 @@
   description = "kdevops-ng's bringup on vanilla Dagu: kernel, QEMU, a NixOS closure and fstests";
 
   inputs = {
-    nixos-flake.url = "github:linux-kdevops/nixos-flake";
+    nixos-flake.url = "path:./vendor/nixos-flake";
     nixpkgs.follows = "nixos-flake/nixpkgs";
     # Dagu 2.20 needs Go 1.27, which only unstable has.
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";

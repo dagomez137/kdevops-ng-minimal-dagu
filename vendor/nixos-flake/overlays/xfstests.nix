@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+#
+# Override xfstests to a current version. The nixpkgs version
+# (2023.05.14) fails to build with modern GCC due to
+# -Werror=implicit-function-declaration in ltp/fsx.c.
+#
+# The nixpkgs recipe handles all the packaging quirks (path
+# patching, wrapper script, libtool workaround). We only need
+# to bump the version and hash.
+final: prev:
+let
+  version = "2026.03.20";
+in
+{
+  xfstests = prev.xfstests.overrideAttrs (prevAttrs: {
+    inherit version;
+    src = prev.fetchzip {
+      url = "https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git/snapshot/xfstests-dev-v${version}.tar.gz";
+      hash = "sha256-f82TsOEikGo9uQyM0hQmgy6A6R/2U4Ot/eINq34kohM=";
+    };
+    # Newer xfstests needs pkg-config for autoconf macros.
+    nativeBuildInputs = (prevAttrs.nativeBuildInputs or [ ]) ++ [ prev.pkg-config ];
+    # gdbm.dev provides gdbm-ndbm.h which xfstests' configure
+    # probes for to enable HAVE_DB; without it src/dbtest is not
+    # built and tests like generic/010 are skipped with the
+    # "src/dbtest not built" .notrun reason.
+    #
+    # liburing unlocks the io_uring probe in src/feature.c.
+    # Without HAVE_LIBURING defined at compile time,
+    # check_uring_support() returns 1 unconditionally and every
+    # _require_io_uring callsite skips with
+    # "kernel does not support IO_URING" — even when
+    # CONFIG_IO_URING=y and the syscall is fully functional.
+    # The nixpkgs xfstests recipe omits liburing from
+    # buildInputs, so xfstests winds up never probing the kernel
+    # regardless of the runtime configuration. Adding it here
+    # lets autoconf detect liburing.h, sets HAVE_LIBURING, and
+    # check_uring_support() actually calls io_uring_queue_init
+    # against the running kernel.
+    buildInputs = (prevAttrs.buildInputs or [ ]) ++ [
+      prev.gdbm
+      prev.liburing
+    ];
+    # Upstream check already runs every test in its own transient systemd
+    # scope (fs<seq>.scope, feature-detected) so a hung test's whole process
+    # tree can be killed from outside, but nothing bounds a test's runtime.
+    # Carry the downstream watchdog patch: when TEST_TIMEOUT (seconds,
+    # global) or TEST_TIMEOUTS ("<seq>:<seconds> ..." per-test overrides) is
+    # set in check's environment, the scope gets RuntimeMaxSec, so systemd
+    # kills an overrunning test and check records the failure and moves on.
+    # Unset keeps upstream behavior: no limit. Queued for xfstests upstream;
+    # drop the patch on the version bump that includes it. The recipe
+    # replaces patchPhase wholesale (postPatch would be silently ignored),
+    # so append there.
+    # A second downstream patch: with RECREATE_TEST_DEV set, check mounts
+    # TEST_DEV from init_rc at startup, before the first section recreates it,
+    # so a fresh, never-formatted test device fails that mount and check exits.
+    # The patch formats TEST_DEV up front under RECREATE_TEST_DEV, so a raw
+    # device is initialised on its first run. Queued for xfstests upstream; drop
+    # on the version bump that includes it.
+    patchPhase = (prevAttrs.patchPhase or "") + ''
+      patch -p1 < ${./xfstests-runtime-max-sec.patch}
+      patch -p1 < ${./xfstests-recreate-test-dev-bootstrap.patch}
+    '';
+
+    # The recipe installs the runtime tree (check, tests, common) but drops
+    # doc/, so the canonical group registry tracked upstream in
+    # doc/group-names.txt -- the group name to description mapping -- is absent
+    # from the installed tree. Install it so a consumer can enumerate the
+    # groups and their descriptions from the runtime package itself.
+    #
+    # The recipe's xfstests-check wrapper builds a writable run directory of
+    # symlinks into the store, one level deep, so `tests` resolves to the
+    # read-only store tree. Tests with per-feature golden output (ext4/001,
+    # generic/035, generic/050, xfs/021, 033, 071, 116, 216, 614, 837) pick
+    # their variant at run time and symlink <seq>.out next to the test script
+    # (_link_out_file in common/rc), which fails there: upstream `make
+    # install` assumes a writable tests directory, re-pointed per run. Rebuild
+    # `tests` in the run directory as a writable symlink farm (real, writable
+    # directories; file contents stay store symlinks). Anchored on the
+    # wrapper's unique exec line with --replace-fail so a wrapper change in
+    # the recipe breaks this build instead of silently dropping the fix. The
+    # proper home for this is the recipe's wrapperScript; drop on the nixpkgs
+    # bump that carries it.
+    postInstall = (prevAttrs.postInstall or "") + ''
+      install -D --mode=0444 doc/group-names.txt $out/lib/xfstests/doc/group-names.txt
+      substituteInPlace $out/bin/xfstests-check --replace-fail \
+        'exec ./check "$@"' \
+        'rm tests
+      cp --recursive --symbolic-link --no-preserve=mode '"$out"'/lib/xfstests/tests tests
+      exec ./check "$@"'
+    '';
+  });
+}

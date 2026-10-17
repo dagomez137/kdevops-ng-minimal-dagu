@@ -15,10 +15,11 @@ reboot on panic would boot and start the tests again. Close it upstream
 with an `extra_qemu_args` list in the vars file.
 
 **nixos-flake lags kdevops-ng's vendored copy.** Upstream has no
-`xfstests@` unit, so `guest/fstests.nix` carries its own `fstests.service`,
-and its kernel toolchain lacks zlib (gendwarfksyms, resolve_btfids), which
-the `kernel` devShell adds. Close it with `git subrepo push` from
-kdevops-ng.
+`xfstests@` unit and none of kdevops-ng's xfstests and xfsprogs overlays,
+so `vendor/nixos-flake` is a copy of kdevops-ng's subrepo, not of upstream.
+Close it with `git subrepo push` from kdevops-ng, then a `git subrepo pull`
+here. Neither copy's kernel toolchain has zlib (gendwarfksyms,
+resolve_btfids), which the `kernel` devShell adds.
 
 **Dagu is not in nixpkgs.** `nix/dagu.nix` builds it from source, web UI
 included, which took 6m13s of the first CI job; NixOS/nixpkgs#379058 asked

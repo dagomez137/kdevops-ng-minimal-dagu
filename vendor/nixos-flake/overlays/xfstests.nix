@@ -58,9 +58,14 @@ in
     # The patch formats TEST_DEV up front under RECREATE_TEST_DEV, so a raw
     # device is initialised on its first run. Queued for xfstests upstream; drop
     # on the version bump that includes it.
+    #
+    # xfsprogs installs xfs_healer under its own libexec, where common/config's
+    # /usr/libexec fallback cannot find it.
     patchPhase = (prevAttrs.patchPhase or "") + ''
       patch -p1 < ${./xfstests-runtime-max-sec.patch}
       patch -p1 < ${./xfstests-recreate-test-dev-bootstrap.patch}
+      substituteInPlace common/config \
+        --replace-fail /usr/libexec/xfsprogs ${final.xfsprogs.out}/libexec/xfsprogs
     '';
 
     # The recipe installs the runtime tree (check, tests, common) but drops

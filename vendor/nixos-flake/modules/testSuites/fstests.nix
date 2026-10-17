@@ -352,6 +352,9 @@ in
     serviceConfig = {
       Type = "oneshot";
       WorkingDirectory = "-${stateDir}/%v";
+      # xfs/437 and xfs/446 check the xfsprogs source tree WORKAREA names;
+      # a section's env file may point it at another checkout.
+      Environment = "WORKAREA=${pkgs.srcOnly pkgs.xfsprogs}";
       EnvironmentFile = "-${stateDir}/%i.env";
       ExecStartPre = "${pkgs.coreutils}/bin/mkdir --parents ${stateDir}/%v";
       ExecStart = "${pkgs.xfstests}/bin/xfstests-check -s %i $XFSTESTS_CHECK_ARGS";

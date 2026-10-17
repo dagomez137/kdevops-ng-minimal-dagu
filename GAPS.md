@@ -77,15 +77,6 @@ is busy" from Nix's evaluation cache; the warnings are harmless.
 
 ## Nix and reuse
 
-**Tools missing from a devShell come from the host.** `nix develop` keeps
-the caller's `PATH` behind the shell's own entries, so a tool the shell
-lacks is found on the host without an error. The kernel shell had no Rust
-toolchain: here `~/.cargo/bin/rustc` 1.91.1 enabled CONFIG_RUST, on the
-runner the preinstalled rustc 1.99.0 did not, and the two kernels differed
-in 114 files. The shell now carries nixos-flake's Rust toolchain; a
-`nix develop --ignore-environment` with an explicit `--keep` list would
-make the next missing tool fail instead of leak.
-
 **Out-of-tree Rust kernels are not reproducible across directories.**
 Since dda135077ecc9 ("rust: build: remap path to avoid absolute path",
 v7.1), an `O=` build passes rustc `--remap-path-scope=macro` when rustc

@@ -3,15 +3,17 @@
 ## Usage: steps/fstests/render --catalog FILE --sections NAMES --devices DEVS
 ##            --sector BYTES (--groups GROUPS | --tests TESTS) --iterations N
 ##            --loop-on-fail N --stop-on-fail true|false --test-timeout SEC
-##            --share DIR --kver RELEASE --output FILE
+##            --times FILE --share DIR --kver RELEASE --output FILE
 ##
 ## Lay down, on the xfstests share DIR, what xfstests@<section>.service reads
 ## for each section in NAMES taken from the config catalog FILE:
 ## <section>.config, the section bound to the guest's disks DEVS (TEST_DEV,
 ## SCRATCH_DEV, LOGWRITES_DEV on the last disk, and the external rt or log
 ## device a section asks for), and <section>.env with HOST_OPTIONS, check's
-## arguments, RECREATE_TEST_DEV and TEST_TIMEOUT. A section the disks cannot
-## hold is skipped with the reason. check runs either GROUPS (-g) or the test
+## arguments, RECREATE_TEST_DEV, TEST_TIMEOUT=SEC and TEST_TIMEOUTS, which
+## gives a test that took more than SEC/3 in the check.time-format FILE three
+## times its time, rounded up to 100 s. A section the disks cannot hold is
+## skipped with the reason. check runs either GROUPS (-g) or the test
 ## list TESTS, or its auto group when both are empty, writes an xunit report
 ## and, for N above 1, runs the list N times (-I, or -i when not stopping on
 ## failure); -L reruns a failed test N more times. The results an earlier run
@@ -23,7 +25,7 @@
 ##       --command steps/fstests/render --catalog guest/xfs.config \
 ##       --sections xfs_bs4k_ss4k --devices '/dev/nvme0n1 /dev/nvme1n1 /dev/nvme2n1' \
 ##       --sector 512 --tests 'generic/001 generic/002' --iterations 1 \
-##       --loop-on-fail 0 --stop-on-fail true --test-timeout 600 \
+##       --loop-on-fail 0 --stop-on-fail true --test-timeout 600 --times guest/xfs.times \
 ##       --share ~/.local/state/qemu-system/fstests/xfstests --kver 7.2.11 \
 ##       --output /dev/stdout
 set -o errexit -o nounset -o pipefail
@@ -32,7 +34,7 @@ groups='' tests=''
 while [ $# -gt 0 ]; do
 	case $1 in
 	--catalog | --sections | --devices | --sector | --groups | --tests | --iterations | \
-		--loop-on-fail | --stop-on-fail | --test-timeout | --share | --kver | --output)
+		--loop-on-fail | --stop-on-fail | --test-timeout | --times | --share | --kver | --output)
 		opt=${1#--}
 		declare "${opt//-/_}=$2"
 		;;
@@ -41,7 +43,7 @@ while [ $# -gt 0 ]; do
 	shift 2
 done
 : "${catalog:?} ${sections:?} ${devices:?} ${sector:?} ${iterations:?} ${loop_on_fail:?}"
-: "${stop_on_fail:?} ${test_timeout:?} ${share:?} ${kver:?} ${output:?}"
+: "${stop_on_fail:?} ${test_timeout:?} ${times:?} ${share:?} ${kver:?} ${output:?}"
 if [ -n "$groups" ] && [ -n "$tests" ]; then
 	echo "--groups and --tests exclude each other: check runs the union of both" >&2
 	exit 2
@@ -78,6 +80,9 @@ if [ "$loop_on_fail" -gt 0 ]; then
 fi
 read -r -a list <<<"$tests"
 args+=("${list[@]}")
+
+timeouts=$(awk --assign limit="$test_timeout" '!/^#/ && $2 * 3 > limit {
+	printf "%stests/%s:%d", (n++ ? " " : ""), $1, int(($2 * 3 + 99) / 100) * 100 }' "$times")
 
 read -r -a devs <<<"$devices"
 set -o xtrace
@@ -125,6 +130,7 @@ for section in $sections; do
 		echo "XFSTESTS_CHECK_ARGS=${args[*]}"
 		echo "RECREATE_TEST_DEV=true"
 		echo "TEST_TIMEOUT=$test_timeout"
+		echo "TEST_TIMEOUTS=$timeouts"
 	} >"$share/$section.env"
 	echo "wrote $share/$section.config $share/$section.env"
 	rm --recursive --force "${share:?}/${kver:?}/results/${section:?}"

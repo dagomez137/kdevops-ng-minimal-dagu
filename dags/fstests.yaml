@@ -37,7 +37,8 @@ params:
     default: 0
   - name: stop_on_fail
     default: "true"
-  # Seconds a single test may run before systemd kills it.
+  # Seconds a test may run before systemd kills it; steps/fstests/render
+  # gives the slow tests in guest/xfs.times longer.
   - name: test_timeout
     type: integer
     default: 600
@@ -161,6 +162,7 @@ steps:
       --groups "${steps.shard.outputs.groups}" --tests "${steps.shard.outputs.tests}"
       --iterations ${params.iterations} --loop-on-fail ${params.loop_on_fail}
       --stop-on-fail ${params.stop_on_fail} --test-timeout ${params.test_timeout}
+      --times guest/xfs.times
       --share "$VM_STATE/xfstests" --kver ${steps.discover.outputs.kver}
       --output "$DAGU_OUTPUT_FILE"
     outputs:

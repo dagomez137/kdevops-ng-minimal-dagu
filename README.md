@@ -32,7 +32,8 @@ nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
 
 `groups` and `tests` exclude each other; `iterations` and `loop_on_fail`
 are check's `-I` and `-L`, `stop_on_fail=false` turns `-I` into `-i`, and
-`test_timeout` is the seconds systemd gives each test.
+`test_timeout` is the seconds systemd gives each test, three times its
+time in `guest/xfs.times` for a slower one.
 
 The host needs `/dev/kvm`, `/dev/vhost-vsock` (the `vhost_vsock` module)
 and a `systemd --user` manager; the root step of
@@ -89,10 +90,10 @@ xfstests share (`guest/fstests.nix`). The fstests module's
 `xfstests@<section>.service` runs `check -s <section>` with the config and
 environment the host laid down on the share, formats the test device itself
 (`RECREATE_TEST_DEV`), runs every test in a scope that systemd kills after
-`TEST_TIMEOUT` seconds and writes an xunit report under
-`<kernel release>/results/<section>`. The SSH key reaches the guest as the
-`ssh.authorized_keys.root` credential on the kernel command line, so the
-closure carries no key. A kernel panic reboots the guest at once
+`TEST_TIMEOUT` seconds, or the test's own entry in `TEST_TIMEOUTS`, and
+writes an xunit report under `<kernel release>/results/<section>`. The SSH
+key reaches the guest as the `ssh.authorized_keys.root` credential on the
+kernel command line, so the closure carries no key. A kernel panic reboots the guest at once
 (`panic=-1`), which ends QEMU under `-no-reboot`.
 
 `vendor/nixos-flake` and `vendor/qemu-system-units` are kdevops-ng's

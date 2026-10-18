@@ -135,6 +135,7 @@ steps:
       --command steps/fstests/shard
       --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid} --fstype xfs
       --groups "${params.groups}" --tests "${params.tests}" --shard "${params.shard}"
+      --times guest/xfs.times
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: groups

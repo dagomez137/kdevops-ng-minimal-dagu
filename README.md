@@ -67,7 +67,7 @@ any unknown option, prints the usage with a by-hand example:
 | `steps/ssh/key` | `.#default` | `key`: the private key that reaches the guest |
 | `steps/qsu/render` | `.#default` | `cid`; the `qemu-system@fstests.service` units |
 | `steps/qsu/boot` | `.#default` | the guest up and answering over SSH |
-| `steps/fstests/shard` | `.#default` | `groups`, `tests`: with `shard=I/N`, every Nth of the groups' tests |
+| `steps/fstests/shard` | `.#default` | `groups`, `tests`: with `shard=I/N`, the groups' tests in N shards of equal time |
 | `steps/fstests/discover` | `.#default` | `kver`, `devices`, `sector`; fails on a test the guest lacks |
 | `steps/fstests/render` | `.#default` | `share`, `sections`: each with its config and env on the share, its earlier results gone |
 | `steps/fstests/wipe` | `.#default` | the disks emptied, per section |

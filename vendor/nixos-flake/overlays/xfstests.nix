@@ -78,19 +78,18 @@ in
     # from the installed tree. Install it so a consumer can enumerate the
     # groups and their descriptions from the runtime package itself.
     #
-    # The recipe's xfstests-check wrapper builds a writable run directory of
-    # symlinks into the store, one level deep, so `tests` resolves to the
-    # read-only store tree. Tests with per-feature golden output (ext4/001,
-    # generic/035, generic/050, xfs/021, 033, 071, 116, 216, 614, 837) pick
-    # their variant at run time and symlink <seq>.out next to the test script
-    # (_link_out_file in common/rc), which fails there: upstream `make
-    # install` assumes a writable tests directory, re-pointed per run. Rebuild
-    # `tests` in the run directory as a writable symlink farm (real, writable
-    # directories; file contents stay store symlinks). Anchored on the
-    # wrapper's unique exec line with --replace-fail so a wrapper change in
-    # the recipe breaks this build instead of silently dropping the fix. The
-    # proper home for this is the recipe's wrapperScript; drop on the nixpkgs
-    # bump that carries it.
+    # The recipe's xfstests-check wrapper builds a run directory of symlinks
+    # into the store, one level deep, but upstream `make install` leaves real,
+    # writable files that tests rely on: tests with per-feature golden output
+    # (ext4/001, generic/035, generic/050, xfs/021, 033, 071, 116, 216, 614,
+    # 837) symlink <seq>.out next to the test script (_link_out_file in
+    # common/rc), and generic/746 copies the run directory as file data,
+    # then deletes some of the regular files it copied, of which a symlink
+    # farm has none. Replace the symlinks with a writable copy of the tree
+    # (25 MB). Anchored on the wrapper's unique exec line with --replace-fail
+    # so a wrapper change in the recipe breaks this build instead of silently
+    # dropping the fix. The proper home for this is the recipe's
+    # wrapperScript; drop on the nixpkgs bump that carries it.
     #
     # nixpkgs' coreutils is one multi-call binary that picks its program by
     # the name it runs under, so generic/452's copy of ls, ls_on_scratch, is
@@ -99,8 +98,9 @@ in
       install -D --mode=0444 doc/group-names.txt $out/lib/xfstests/doc/group-names.txt
       substituteInPlace $out/bin/xfstests-check --replace-fail \
         'exec ./check "$@"' \
-        'rm tests
-      cp --recursive --symbolic-link --no-preserve=mode '"$out"'/lib/xfstests/tests tests
+        'find . -maxdepth 1 -type l -delete
+      cp --recursive '"$out"'/lib/xfstests/. .
+      chmod --recursive u+w .
       export PATH=${prev.coreutils.override { singleBinary = false; }}/bin:$PATH
       exec ./check "$@"'
     '';

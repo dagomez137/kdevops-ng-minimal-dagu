@@ -80,8 +80,10 @@ only one level of child gets the authored path: the `section` DAG under
 `guest` ran from `/tmp/nix-shell.*/dagu` and found no `flake.nix`. A three
 level toy DAG with `working_dir: ..` throughout printed the checkout in
 the middle DAG and the temporary directory in the last. The `root` step
-hands the checkout down as a parameter, and both children set
-`working_dir: ${params.root}`.
+hands the checkout down as a parameter, and the children set
+`working_dir: ${params.root}`. Each such child also leaves an empty
+directory named `${params.root}` where `dagu` started; its steps run in
+the expanded path, and git does not track an empty directory.
 
 **A child run has no log file.** In a child DAG, `DAG_RUN_LOG_FILE` names
 `log_dir/<sub-run-id>.log`, which is never written, so the guest DAG's

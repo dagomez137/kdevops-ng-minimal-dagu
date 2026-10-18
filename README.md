@@ -35,7 +35,15 @@ are check's `-I` and `-L`, `stop_on_fail=false` turns `-I` into `-i`, and
 `test_timeout` is the seconds systemd gives each test, three times its
 time in `guest/xfs.times` for a slower one. A section listed in `notrun`
 (`guest/xfs.notrun`) fails when it skips a test the list does not name for
-it, which is how a missing tool, kernel option or device shows up.
+it, which is how a missing tool, kernel option or device shows up. CI's
+smoke job runs the about 100 tests of `guest/xfs.smoke`, which between them
+reach every `_require_*` helper of the passing auto tests:
+
+```sh
+nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+    --command dagu --config config.yaml start fstests -- \
+    "tests=$(grep --invert-match '^#' guest/xfs.smoke | paste --serial --delimiters=' ')"
+```
 
 The host needs `/dev/kvm`, `/dev/vhost-vsock` (the `vhost_vsock` module)
 and a `systemd --user` manager; the root step of

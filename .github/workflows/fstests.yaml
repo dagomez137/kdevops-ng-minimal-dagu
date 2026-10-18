@@ -91,7 +91,7 @@ jobs:
           - section: xfs_bs4k_ss4k
             shard: ""
             groups: ""
-            tests: generic/001 generic/002 generic/003 generic/004 generic/005
+            tests: $(grep --invert-match '^#' guest/xfs.smoke | paste --serial --delimiters=' ')
     name: fstests (${{ matrix.section }} ${{ matrix.shard || 'smoke' }})
     steps:
       - uses: actions/checkout@v5

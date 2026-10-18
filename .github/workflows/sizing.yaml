@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+# The same slice of auto on one runner, split among guests of different
+# sizes, to find the guest shape that ends a shard soonest. It boots the
+# prebuilt artifact of an earlier fstests run (kept 3 days) instead of
+# building; the root step is the one fstests.yaml explains.
+name: sizing
+
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: the fstests run whose prebuilt artifact to boot
+        required: true
+      shard:
+        description: the slice of auto every shape runs
+        default: 1/6
+
+jobs:
+  sizing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {vms: 1, cpus: 4, ram: 4096}
+          - {vms: 1, cpus: 4, ram: 12288}
+          - {vms: 1, cpus: 2, ram: 2048}
+          - {vms: 1, cpus: 2, ram: 4096}
+          - {vms: 2, cpus: 2, ram: 6144}
+          - {vms: 2, cpus: 4, ram: 6144}
+          - {vms: 3, cpus: 1, ram: 4096}
+          - {vms: 4, cpus: 1, ram: 3072}
+    name: sizing (${{ matrix.vms }} x ${{ matrix.cpus }} CPUs ${{ matrix.ram }} MiB)
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: prebuilt
+          path: ${{ runner.temp }}/prebuilt
+          run-id: ${{ inputs.run }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare the runner (root)
+        run: |
+          set -o xtrace
+          sudo modprobe vhost_vsock
+          printf '%s\n' \
+            'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            'KERNEL=="vhost-vsock", GROUP="kvm", MODE="0666", OPTIONS+="static_node=vhost-vsock"' |
+            sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm --name-match=vhost-vsock
+          ls --format=long /dev/kvm /dev/vhost-vsock
+          sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id --user).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id --user)" >>"$GITHUB_ENV"
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            trusted-users = root runner
+            extra-substituters = file://${{ runner.temp }}/prebuilt/cache?trusted=true
+
+      - name: Run the DAG
+        run: >-
+          nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+          --command dagu --config config.yaml start fstests --
+          "prebuilt=$RUNNER_TEMP/prebuilt" sections=xfs_bs4k_ss4k groups=auto tests=
+          "shard=${{ inputs.shard }}" "vms=${{ matrix.vms }}"
+          "cpus=${{ matrix.cpus }}" "ram=${{ matrix.ram }}"
+
+      - name: Show the run
+        if: always()
+        run: >-
+          nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+          --command dagu --config config.yaml status fstests
+
+      - name: Publish the report
+        if: always()
+        run: cat ~/.local/state/kdevops-ng-minimal-dagu/report.md >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sizing-${{ matrix.vms }}x${{ matrix.cpus }}c${{ matrix.ram }}m
+          path: |
+            ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
+            ~/.local/state/kdevops-ng-minimal-dagu/report.md
+            ~/.local/state/qemu-system/fstests-*/xfstests
+          if-no-files-found: ignore

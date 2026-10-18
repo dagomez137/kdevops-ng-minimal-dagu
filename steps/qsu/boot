@@ -26,7 +26,7 @@ done
 : "${name:?} ${state:?} ${key:?} ${cid:?}"
 
 set -o xtrace
-mapfile -t drives < <(jq --raw-output '.nvme.drives[].file' "$state/vars.json")
+mapfile -t drives < <(jq --raw-output '.nvme.drives[].namespaces[].file' "$state/vars.json")
 rm --force "${drives[@]}"
 truncate --size 16G "${drives[@]}"
 systemctl --user restart "qemu-system@$name.service"

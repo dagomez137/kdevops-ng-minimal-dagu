@@ -8,7 +8,8 @@
 ## drives from the qemu-system-units checkout QSU into ~/.config/systemd.
 ## The guest boots KERNEL (its image and modules) with the NixOS INIT and
 ## INITRD, and gets three shares: the Nix store, the kernel's modules and
-## DIR/xfstests, three NVMe drives and a vsock device. Root in the guest
+## DIR/xfstests, three NVMe drives that write 128 KiB atomically (Linux
+## reads only the per-namespace NAWUPF) and a vsock device. Root in the guest
 ## accepts the SSH key FILE, handed over as the ssh.authorized_keys.root
 ## credential on the kernel command line. DIR is the unit's state directory
 ## and also holds the vars file and the NVMe drives. A kernel panic reboots
@@ -66,11 +67,12 @@ jq --null-input --arg name "$name" --arg qemu "$qemu" --arg virtiofsd "$virtiofs
 		{tag: "modules", dir: "\($kernel)/lib/modules"},
 		{tag: "xfstests", dir: "\($state)/xfstests"}
 	],
-	nvme: {drives: [
-		{file: "\($state)/nvme0.raw", format: "raw"},
-		{file: "\($state)/nvme1.raw", format: "raw"},
-		{file: "\($state)/nvme2.raw", format: "raw"}
-	]},
+	nvme: {drives: [range(3) | {namespaces: [{
+		file: "\($state)/nvme\(.).raw",
+		format: "raw",
+		"atomic.nawun": 255,
+		"atomic.nawupf": 255
+	}]}]},
 	vsock_cid: $cid,
 	extra_qemu_args: "-no-reboot"
 }' >"$vars"

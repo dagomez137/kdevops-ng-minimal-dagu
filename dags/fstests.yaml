@@ -22,6 +22,9 @@ params:
     default: ""
   - name: tests
     default: generic/001 generic/002 generic/003 generic/004 generic/005
+  # Shard I/N of the groups' tests, so N hosts share a run; empty runs all.
+  - name: shard
+    default: ""
   # A directory steps/nix/export wrote on another host, to boot instead of
   # building; empty builds here.
   - name: prebuilt
@@ -124,13 +127,25 @@ steps:
       --command steps/qsu/boot --name fstests --state "$VM_STATE"
       --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid}
 
-  - id: discover
+  - id: shard
     depends: boot
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/shard
+      --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid} --fstype xfs
+      --groups "${params.groups}" --tests "${params.tests}" --shard "${params.shard}"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: groups
+      - name: tests
+
+  - id: discover
+    depends: shard
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/discover
       --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid}
-      --tests "${params.tests}" --output "$DAGU_OUTPUT_FILE"
+      --tests "${steps.shard.outputs.tests}" --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: kver
       - name: devices
@@ -143,7 +158,7 @@ steps:
       --command steps/fstests/render --catalog guest/xfs.config
       --sections "${params.sections}" --devices "${steps.discover.outputs.devices}"
       --sector ${steps.discover.outputs.sector}
-      --groups "${params.groups}" --tests "${params.tests}"
+      --groups "${steps.shard.outputs.groups}" --tests "${steps.shard.outputs.tests}"
       --iterations ${params.iterations} --loop-on-fail ${params.loop_on_fail}
       --stop-on-fail ${params.stop_on_fail} --test-timeout ${params.test_timeout}
       --share "$VM_STATE/xfstests" --kver ${steps.discover.outputs.kver}

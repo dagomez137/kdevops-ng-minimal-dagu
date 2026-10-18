@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/shard --key FILE --cid CID --fstype FSTYPE
+##            --groups GROUPS --tests TESTS --shard I/N --output FILE
+##
+## Pick shard I of N of a run, so N hosts share it. With an empty shard, or
+## with a test list, append groups=GROUPS and tests=TESTS to FILE unchanged.
+## Otherwise expand GROUPS (auto when empty) into the generic and FSTYPE
+## tests the guest at vsock CID CID carries, as check -g does from each
+## tests/<dir>/group.list, deal them round robin and append groups= and
+## tests=<every Nth test from the Ith> to FILE:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/shard \
+##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242 \
+##       --fstype xfs --groups auto --tests '' --shard 1/4 --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--key | --cid | --fstype | --groups | --tests | --shard | --output)
+		declare "${1#--}=$2"
+		;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${key:?} ${cid:?} ${fstype:?} ${groups?} ${tests?} ${shard?} ${output:?}"
+
+if [ -z "$shard" ] || [ -n "$tests" ]; then
+	printf 'groups=%s\ntests=%s\n' "$groups" "$tests" >>"$output"
+	exit 0
+fi
+if ! [[ $shard =~ ^([0-9]+)/([0-9]+)$ ]] || [ "${BASH_REMATCH[1]}" -lt 1 ] ||
+	[ "${BASH_REMATCH[1]}" -gt "${BASH_REMATCH[2]}" ]; then
+	echo "--shard takes I/N with 1 <= I <= N, not '$shard'" >&2
+	exit 2
+fi
+index=${BASH_REMATCH[1]} count=${BASH_REMATCH[2]}
+
+ssh=("$(dirname "$0")/../qsu/ssh" --key "$key" --cid "$cid" --)
+set -o xtrace
+all=$(for dir in generic "$fstype"; do
+	"${ssh[@]}" cat "/usr/lib/xfstests/tests/$dir/group.list" |
+		awk -v dir="$dir" -v groups="${groups:-auto}" '
+			BEGIN { n = split(groups, want, /[ ,]+/) }
+			/^[0-9]/ { for (i = 2; i <= NF; i++) for (j = 1; j <= n; j++)
+				if ($i == want[j]) { print dir "/" $1; next } }'
+done)
+picked=$(awk -v index_="$index" -v count="$count" \
+	'(NR - index_) % count == 0 { printf "%s%s", (n++ ? " " : ""), $0 }' <<<"$all")
+echo "shard $shard: $(wc --words <<<"$picked") of $(wc --lines <<<"$all") tests"
+printf 'groups=\ntests=%s\n' "$picked" >>"$output"

@@ -84,7 +84,7 @@ jobs:
       fail-fast: false
       matrix:
         section: [xfs_bs4k_ss4k, xfs_full_bs4k_ss4k, xfs_full_bs16k_ss16k]
-        shard: [1/4, 2/4, 3/4, 4/4]
+        shard: [1/6, 2/6, 3/6, 4/6, 5/6, 6/6]
         groups: [auto]
         tests: [""]
         include:

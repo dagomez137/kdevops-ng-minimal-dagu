@@ -126,11 +126,9 @@ restriction on unprivileged user namespaces for virtiofsd's namespace
 sandbox and starts the runner user's systemd manager through lingering. It
 is the one exception to the user-mode rule, scoped in `CLAUDE.md`.
 
-**6 h per job.** `auto` on one section takes about 8 h on a runner, so
-the workflow builds once and runs each section in 4 shards of about 2 h,
-12 jobs plus smoke, under the 20 a Free account runs at a time. The shards
-deal the tests round robin, which local per-test times put within 5% of
-each other.
+**6 h per job.** `auto` on one section takes about 6 h on a runner, so
+the workflow builds once and runs each section in 6 shards of about 70
+min, 18 jobs plus smoke, under the 20 a Free account runs at a time.
 
 **Logs need a token.** Anonymous API calls can read job and step status but
 get 403 for step logs and artifacts, even on a public repository; the job

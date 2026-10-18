@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Daniel Gomez <da.gomez@kernel.org>
+Date: Sun, 18 Oct 2026 21:00:00 +0200
+Subject: [PATCH] report: let XUNIT_TESTCASES name where the xunit testcases go
+
+check collects each test's xunit <testcase> in a file under its private
+$tmp and writes result.xml from it only when the section ends. When the
+machine under test crashes or hangs mid-section, the run never reaches
+that point, and the results of every test that finished are lost with
+$tmp, although each one was complete.
+
+When XUNIT_TESTCASES names a file, append the testcases there instead,
+for example on storage that outlives the machine. Whoever runs check then
+still has the finished tests' results after a crash, and can start check
+again with the rest of the tests (-E naming those that ran): it appends
+to the same file, and the result.xml it writes at the end holds the tests
+of both runs. check never removes the file, so a fresh run must start
+from an empty one, and it serves one section per run. Unset keeps the
+previous behaviour.
+
+Assisted-by: LLM
+Signed-off-by: Daniel Gomez <da.gomez@kernel.org>
+---
+ common/report | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/common/report b/common/report
+index 2fa15e6..2c06fd1 100644
+--- a/common/report
++++ b/common/report
+@@ -117,7 +117,7 @@ _xunit_make_section_report()
+ 	if [ $sect_name == '-no-sections-' ]; then
+ 		sect_name='global'
+ 	fi
+-	local report=$tmp.report.xunit.$sect_name.xml
++	local report=${XUNIT_TESTCASES:-$tmp.report.xunit.$sect_name.xml}
+ 	rm -f "$tmp_fn"
+ 	# Header
+ 	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" > "$tmp_fn"
+@@ -179,7 +179,7 @@ _xunit_make_testcase_report()
+ 	if [ $sect_name == '-no-sections-' ]; then
+ 		sect_name='global'
+ 	fi
+-	local report=$tmp.report.xunit.$sect_name.xml
++	local report=${XUNIT_TESTCASES:-$tmp.report.xunit.$sect_name.xml}
+ 
+ 	echo -e "\t<testcase classname=\"xfstests.$sect_name\" name=\"$test_name\" time=\"$test_time\">" >> $report
+ 	case $test_status in
+-- 
+2.53.0
+

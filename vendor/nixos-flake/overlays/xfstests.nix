@@ -58,6 +58,11 @@ in
     # The patch formats TEST_DEV up front under RECREATE_TEST_DEV, so a raw
     # device is initialised on its first run. Queued for xfstests upstream; drop
     # on the version bump that includes it.
+    # A third: check keeps each test's xunit testcase under its private $tmp
+    # until the section ends, so a guest that crashes mid-section loses the
+    # results of every test that finished. XUNIT_TESTCASES names a file to
+    # append them to instead, on storage that outlives the guest, so the run
+    # can resume with -E. Unset keeps upstream behaviour.
     #
     # The recipe rewrites every /bin/true to a bare `true`, which in xfs/031's
     # mkfs protofile is a file to copy in, so mkfs fails to open it and the
@@ -67,6 +72,7 @@ in
     patchPhase = (prevAttrs.patchPhase or "") + ''
       patch -p1 < ${./xfstests-runtime-max-sec.patch}
       patch -p1 < ${./xfstests-recreate-test-dev-bootstrap.patch}
+      patch -p1 < ${./xfstests-xunit-testcases.patch}
       substituteInPlace tests/xfs/031 --replace-fail ' 3 1 true' ' 3 1 ${prev.coreutils}/bin/true'
       substituteInPlace common/config \
         --replace-fail /usr/libexec/xfsprogs ${final.xfsprogs.out}/libexec/xfsprogs

@@ -5,13 +5,14 @@
 ## Write what qemu-system@VM.service and its virtiofsd@VM-* shares printed
 ## since FILE was created, from the journal, to PATH: the guest's console,
 ## with its kernel messages and check's output, for a guest that crashed or
-## hung, and why a share or QEMU would not start. FILE is the run's own
-## log, which Dagu names in DAG_RUN_LOG_FILE, so the console is this run's:
+## hung, and why a share or QEMU would not start. FILE is the run's work
+## directory, which Dagu names in DAG_RUN_WORK_DIR, so the console is this
+## run's:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
-##       --command steps/qsu/console --name fstests \
-##       --since-file ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs/fstests/dag-run_*/dag-run_*.log \
-##       --file ~/.local/state/qemu-system/fstests/xfstests/console.log
+##       --command steps/qsu/console --name fstests-1 \
+##       --since-file ~/.local/state/kdevops-ng-minimal-dagu/dagu/data/dag-run-work/guest/<run> \
+##       --file ~/.local/state/qemu-system/fstests-1/xfstests/console.log
 set -o errexit -o nounset -o pipefail
 
 while [ $# -gt 0 ]; do

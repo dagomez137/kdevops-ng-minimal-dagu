@@ -144,7 +144,7 @@ jobs:
       # need one.
       - name: Publish the report
         if: always()
-        run: cat ~/.local/state/qemu-system/fstests/xfstests/report.md >>"$GITHUB_STEP_SUMMARY"
+        run: cat ~/.local/state/kdevops-ng-minimal-dagu/report.md >>"$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -152,5 +152,6 @@ jobs:
           name: fstests-${{ strategy.job-index }}-${{ matrix.section }}
           path: |
             ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
-            ~/.local/state/qemu-system/fstests/xfstests
+            ~/.local/state/kdevops-ng-minimal-dagu/report.md
+            ~/.local/state/qemu-system/fstests-*/xfstests
           if-no-files-found: ignore

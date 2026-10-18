@@ -10,8 +10,8 @@
 ## has it. Fail after SEC seconds (default 240) without an answer:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
-##       --command steps/qsu/boot --name fstests \
-##       --state ~/.local/state/qemu-system/fstests \
+##       --command steps/qsu/boot --name fstests-1 \
+##       --state ~/.local/state/qemu-system/fstests-1 \
 ##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242
 set -o errexit -o nounset -o pipefail
 

@@ -1,43 +1,43 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: copyleft-next-0.3.1
-## Usage: steps/qsu/render --name VM --qemu BINARY --virtiofsd BINARY
-##            --kernel PATH --init PATH --initrd PATH --key FILE --state DIR
-##            --qsu DIR --output FILE
+## Usage: steps/qsu/render --name VM --cpus N --ram MIB --qemu BINARY
+##            --virtiofsd BINARY --kernel PATH --init PATH --initrd PATH
+##            --key FILE --state DIR --qsu DIR --output FILE
 ##
 ## Write the qemu-system@VM.service unit, its virtiofsd shares and NVMe
 ## drives from the qemu-system-units checkout QSU into ~/.config/systemd.
-## The guest boots KERNEL (its image and modules) with the NixOS INIT and
-## INITRD, and gets three shares: the Nix store, the kernel's modules and
-## DIR/xfstests, three NVMe drives that write 128 KiB atomically (Linux
-## reads only the per-namespace NAWUPF) and a vsock device. Root in the guest
-## accepts the SSH key FILE, handed over as the ssh.authorized_keys.root
-## credential on the kernel command line. DIR is the unit's state directory
-## and also holds the vars file and the NVMe drives. A kernel panic reboots
-## the guest at once (panic=-1), which under -no-reboot ends QEMU. Append
-## cid=<vsock CID> to FILE:
+## The guest has N CPUs and MIB MiB of memory, boots KERNEL (its image and
+## modules) with the NixOS INIT and INITRD, and gets three shares: the Nix
+## store, the kernel's modules and DIR/xfstests, three NVMe drives that
+## write 128 KiB atomically (Linux reads only the per-namespace NAWUPF) and a
+## vsock device. Root in the guest accepts the SSH key FILE, handed over as
+## the ssh.authorized_keys.root credential on the kernel command line. DIR is
+## the unit's state directory and also holds the vars file and the NVMe
+## drives. A kernel panic reboots the guest at once (panic=-1), which under
+## -no-reboot ends QEMU. Append cid=<vsock CID> to FILE:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
-##       --command steps/qsu/render --name fstests \
+##       --command steps/qsu/render --name fstests-1 --cpus 4 --ram 4096 \
 ##       --qemu ~/.local/state/kdevops-ng-minimal-dagu/qemu/install/bin/qemu-system-x86_64 \
 ##       --virtiofsd ~/.local/state/kdevops-ng-minimal-dagu/virtiofsd/bin/virtiofsd \
 ##       --kernel /nix/store/...-linux-7.2.11 --init /nix/store/...-nixos-system-.../init \
 ##       --initrd /nix/store/...-initrd-linux/initrd \
 ##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 \
-##       --state ~/.local/state/qemu-system/fstests --qsu vendor/qemu-system-units \
+##       --state ~/.local/state/qemu-system/fstests-1 --qsu vendor/qemu-system-units \
 ##       --output /dev/stdout
 set -o errexit -o nounset -o pipefail
 
 while [ $# -gt 0 ]; do
 	case $1 in
-	--name | --qemu | --virtiofsd | --kernel | --init | --initrd | --key | --state | \
-		--qsu | --output)
+	--name | --cpus | --ram | --qemu | --virtiofsd | --kernel | --init | --initrd | \
+		--key | --state | --qsu | --output)
 		declare "${1#--}=$2"
 		;;
 	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
 	esac
 	shift 2
 done
-: "${name:?} ${qemu:?} ${virtiofsd:?} ${kernel:?} ${init:?} ${initrd:?} ${key:?}"
+: "${name:?} ${cpus:?} ${ram:?} ${qemu:?} ${virtiofsd:?} ${kernel:?} ${init:?} ${initrd:?} ${key:?}"
 : "${state:?} ${qsu:?} ${output:?}"
 
 set -o xtrace
@@ -50,13 +50,14 @@ mkdir --parents "$state/xfstests"
 vars=$state/vars.json
 jq --null-input --arg name "$name" --arg qemu "$qemu" --arg virtiofsd "$virtiofsd" \
 	--arg kernel "$kernel" --arg init "$init" --arg initrd "$initrd" --arg state "$state" \
-	--argjson cid "$cid" --arg credential "$credential" '{
+	--argjson cpus "$cpus" --argjson ram "$ram" --argjson cid "$cid" \
+	--arg credential "$credential" '{
 	vm_name: $name,
 	qemu_binary: $qemu,
 	virtiofsd_binary: $virtiofsd,
 	machine_type: "q35",
-	ram: 4096,
-	cpus: 4,
+	ram: $ram,
+	cpus: $cpus,
 	kernel: {
 		image: "\($kernel)/bzImage",
 		append: "root=tmpfs console=ttyS0,115200 panic=-1 init=\($init) systemd.set_credential_binary=ssh.authorized_keys.root:\($credential)",

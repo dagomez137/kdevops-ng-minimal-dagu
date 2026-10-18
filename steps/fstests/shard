@@ -4,11 +4,11 @@
 ##            --groups GROUPS --tests TESTS --shard I/N --times FILE
 ##            --output FILE
 ##
-## Pick shard I of N of a run, so N hosts share it. With an empty shard, or
-## with a test list, append groups=GROUPS and tests=TESTS to FILE unchanged.
-## Otherwise expand GROUPS (auto when empty) into the generic and FSTYPE
-## tests the guest at vsock CID CID carries, as check -g does from each
-## tests/<dir>/group.list, deal them longest first to the shard with the
+## Pick shard I of N of a run, so N hosts or guests share it. With an empty
+## shard, append groups=GROUPS and tests=TESTS to FILE unchanged. Otherwise
+## take the test list TESTS, or expand GROUPS (auto when both are empty)
+## into the generic and FSTYPE tests the guest at vsock CID CID carries, as
+## check -g does from each tests/<dir>/group.list, deal them longest first to the shard with the
 ## least time so far, by the seconds in the check.time-format FILE (10 for
 ## a test it lacks, plus 1 for each test's setup), and append groups= and
 ## tests=<shard I's tests> to FILE:
@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
 done
 : "${key:?} ${cid:?} ${fstype:?} ${groups?} ${tests?} ${shard?} ${times:?} ${output:?}"
 
-if [ -z "$shard" ] || [ -n "$tests" ]; then
+if [ -z "$shard" ]; then
 	printf 'groups=%s\ntests=%s\n' "$groups" "$tests" >>"$output"
 	exit 0
 fi
@@ -44,13 +44,18 @@ index=${BASH_REMATCH[1]} count=${BASH_REMATCH[2]}
 
 ssh=("$(dirname "$0")/../qsu/ssh" --key "$key" --cid "$cid" --)
 set -o xtrace
-all=$(for dir in generic "$fstype"; do
-	"${ssh[@]}" cat "/usr/lib/xfstests/tests/$dir/group.list" |
-		awk -v dir="$dir" -v groups="${groups:-auto}" '
-			BEGIN { n = split(groups, want, /[ ,]+/) }
-			/^[0-9]/ { for (i = 2; i <= NF; i++) for (j = 1; j <= n; j++)
-				if ($i == want[j]) { print dir "/" $1; next } }'
-done)
+if [ -n "$tests" ]; then
+	read -r -a list <<<"$tests"
+	all=$(printf '%s\n' "${list[@]}")
+else
+	all=$(for dir in generic "$fstype"; do
+		"${ssh[@]}" cat "/usr/lib/xfstests/tests/$dir/group.list" |
+			awk -v dir="$dir" -v groups="${groups:-auto}" '
+				BEGIN { n = split(groups, want, /[ ,]+/) }
+				/^[0-9]/ { for (i = 2; i <= NF; i++) for (j = 1; j <= n; j++)
+					if ($i == want[j]) { print dir "/" $1; next } }'
+	done)
+fi
 picked=$(awk 'NR == FNR { if (!/^#/) time[$1] = $2; next }
 	{ print ($0 in time ? time[$0] : 10) + 1, $0 }' "$times" - <<<"$all" |
 	sort --key=1,1nr --key=2,2 |

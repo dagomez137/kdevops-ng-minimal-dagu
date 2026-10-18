@@ -66,11 +66,26 @@ with `parallel:` once a child has failed, after it has run every item.
 status as on a success. The `judge` step makes `report.md` and the exit
 status say the same thing.
 
-**A section's log is one level down.** `dagu status` shows the `sections`
-step as `subdag: <id>` lines; each section's steps need
-`dagu status --run-id=<run> --sub-run-id=<id> fstests`, and their log
-files sit in `log_dir/run_<time>_<attempt>/`, beside the `fstests/`
-directory of the parent runs, not under the parent's.
+**A section's log is two levels down.** `dagu status` shows the `guests`
+step as `subdag: <id>` lines, and each guest its `sections` step the same
+way; their steps need `dagu status --run-id=<run> --sub-run-id=<id>
+fstests`, and their log files sit in `log_dir/run_<time>_<attempt>/`,
+beside the `fstests/` directory of the parent runs, not under the
+parent's.
+
+**A DAG two levels down loses its directory.** Dagu runs a DAG defined in
+the same file from a temporary copy and resolves a relative `working_dir`
+against the authored file (`authoredFile` in `internal/spec/dag.go`), but
+only one level of child gets the authored path: the `section` DAG under
+`guest` ran from `/tmp/nix-shell.*/dagu` and found no `flake.nix`. A three
+level toy DAG with `working_dir: ..` throughout printed the checkout in
+the middle DAG and the temporary directory in the last. The `root` step
+hands the checkout down as a parameter, and both children set
+`working_dir: ${params.root}`.
+
+**A child run has no log file.** In a child DAG, `DAG_RUN_LOG_FILE` names
+`log_dir/<sub-run-id>.log`, which is never written, so the guest DAG's
+console step takes its start time from `DAG_RUN_WORK_DIR` instead.
 
 **Two paths do not follow `admin_logs_dir`.** Dagu kept its event store
 under `~/.local/share/dagu/logs/admin/events` and makes `~/.config/dagu`

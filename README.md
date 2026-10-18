@@ -45,26 +45,32 @@ nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
     "tests=$(grep --invert-match '^#' guest/xfs.smoke | paste --serial --delimiters=' ')"
 ```
 
+`vms=V` boots V guests of `cpus` CPUs and `ram` MiB each (4 and 4096 by
+default) and gives each a time-balanced shard of the run's tests, or of
+this host's `shard`; `.github/workflows/sizing.yaml` times one slice of
+`auto` on guests of several shapes.
+
 The host needs `/dev/kvm`, `/dev/vhost-vsock` (the `vhost_vsock` module)
 and a `systemd --user` manager; the root step of
 `.github/workflows/fstests.yaml` sets them up on a fresh Ubuntu 24.04
 runner and is the list of what a host's owner does by hand. Run logs, the
 kernel, QEMU and the closure GC roots go under
-`~/.local/state/kdevops-ng-minimal-dagu`; the VM's state (NVMe drives, the
-fstests share with the results) under `~/.local/state/qemu-system/fstests`;
-its units under `~/.config/systemd`.
+`~/.local/state/kdevops-ng-minimal-dagu`, the joined `report.md` included;
+each guest's state (NVMe drives, the fstests share with the results) under
+`~/.local/state/qemu-system/fstests-<n>`; its units under
+`~/.config/systemd`.
 
 ## Steps
 
 `dags/fstests.yaml` wires the executables under `steps/`: it runs
 `dags/build.yaml` for the kernel, QEMU, the closure and virtiofsd, or with
 `prebuilt=DIR` imports what that DAG's `export=DIR` wrote on another host,
-and runs the per-section steps from its `section` DAG, once per section and
-one section at a time. Each takes every input as a long option, prints each command it
-runs (`set -o xtrace`) and
-appends its result as `name=value` lines to the `--output` file, which is
-Dagu's `$DAGU_OUTPUT_FILE` in a run and `/dev/stdout` by hand. `--help`, or
-any unknown option, prints the usage with a by-hand example:
+runs its `guest` DAG once per guest, side by side, and in each guest the
+per-section steps from its `section` DAG, one section at a time. Each step
+takes every input as a long option, prints each command it runs
+(`set -o xtrace`) and appends its result as `name=value` lines to the
+`--output` file, which is Dagu's `$DAGU_OUTPUT_FILE` in a run and
+`/dev/stdout` by hand. `--help`, or any unknown option, prints the usage with a by-hand example:
 
 | Step | Runs in | Result |
 |------|---------|--------|
@@ -75,16 +81,17 @@ any unknown option, prints the usage with a by-hand example:
 | `steps/nix/export` | `.#default` | a binary cache, QEMU and `build.env` in a directory another host imports |
 | `steps/nix/import` | `.#default` | the exported store paths realised, QEMU and `build.env` in place |
 | `steps/ssh/key` | `.#default` | `key`: the private key that reaches the guest |
-| `steps/qsu/render` | `.#default` | `cid`; the `qemu-system@fstests.service` units |
+| `steps/fstests/plan` | `.#default` | `guests`, `reports`: each guest's name and shard, and where its report goes |
+| `steps/qsu/render` | `.#default` | `cid`; the `qemu-system@fstests-<n>.service` units |
 | `steps/qsu/boot` | `.#default` | the guest up and answering over SSH |
-| `steps/fstests/shard` | `.#default` | `groups`, `tests`: with `shard=I/N`, the groups' tests in N shards of equal time |
+| `steps/fstests/shard` | `.#default` | `groups`, `tests`: with a shard I/N, the tests in N shards of equal time |
 | `steps/fstests/discover` | `.#default` | `kver`, `devices`, `sector`; fails on a test the guest lacks |
-| `steps/fstests/render` | `.#default` | `share`, `sections`: each with its config and env on the share, its earlier results gone |
+| `steps/fstests/render` | `.#default` | `share`, `sections`, `reports`: each with its config and env on the share, its earlier results gone |
 | `steps/fstests/wipe` | `.#default` | the disks emptied, per section |
 | `steps/fstests/prepare` | `.#default` | the mount points, per section |
 | `steps/fstests/start` | `.#default` | `outcome`: `xfstests@<section>.service` run to its end, or stopped at the deadline |
 | `steps/fstests/collect` | `.#default` | `verdict`: from the outcome and the section's xunit report |
-| `steps/fstests/report` | `.#default` | `report.md` on the share |
+| `steps/fstests/report` | `.#default` | `report.md`: a guest's sections on its share, every guest's in the state directory |
 | `steps/fstests/judge` | `.#default` | fails unless every section passed |
 | `steps/qsu/console` | `.#default` | `console.log` on the share, the VM's console from the journal |
 

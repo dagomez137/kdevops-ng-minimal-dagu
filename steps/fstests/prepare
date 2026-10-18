@@ -10,7 +10,7 @@
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/fstests/prepare \
 ##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242 \
-##       --section xfs_bs4k_ss4k --share ~/.local/state/qemu-system/fstests/xfstests
+##       --section xfs_bs4k_ss4k --share ~/.local/state/qemu-system/fstests-1/xfstests
 set -o errexit -o nounset -o pipefail
 
 while [ $# -gt 0 ]; do

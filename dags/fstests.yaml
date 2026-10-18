@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 description: >-
   Build a kernel, QEMU and the fstests NixOS closure, boot them as
-  qemu-system@fstests.service and run each fstests section as
+  qemu-system@fstests-<n>.service guests and run each fstests section as
   xfstests@<section>.service on three NVMe drives.
 working_dir: ..
 
@@ -22,9 +22,20 @@ params:
     default: ""
   - name: tests
     default: generic/001 generic/002 generic/003 generic/004 generic/005
-  # Shard I/N of the groups' tests, so N hosts share a run; empty runs all.
+  # Shard I/N of the tests, so N hosts share a run; empty runs all.
   - name: shard
     default: ""
+  # Guests this host splits its tests among, each with cpus CPUs and ram
+  # MiB of memory.
+  - name: vms
+    type: integer
+    default: 1
+  - name: cpus
+    type: integer
+    default: 4
+  - name: ram
+    type: integer
+    default: 4096
   # A directory steps/nix/export wrote on another host, to boot instead of
   # building; empty builds here.
   - name: prebuilt
@@ -51,7 +62,6 @@ env:
   # Dagu hands steps a filtered environment; systemctl --user needs this.
   - XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}
   - STATE: ${HOME}/.local/state/kdevops-ng-minimal-dagu
-  - VM_STATE: ${HOME}/.local/state/qemu-system/fstests
 
 steps:
   - id: host
@@ -109,18 +119,137 @@ steps:
     outputs:
       - name: key
 
+  # Dagu resolves the relative working_dir of a DAG two levels down against
+  # a temporary copy, so the guest and section DAGs take the checkout from
+  # here.
+  - id: root
+    run: echo "root=$PWD" >>"$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: root
+
+  - id: plan
+    depends: host
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/plan --vms ${params.vms} --shard "${params.shard}"
+      --state "$HOME/.local/state/qemu-system" --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: guests
+        type: json
+      - name: reports
+
+  # One run of the guest DAG below per guest, side by side; a failed guest
+  # does not stop the others, and judge fails the run.
+  - id: guests
+    depends: [inputs, key, plan, root]
+    action: dag.run
+    with:
+      dag: guest
+      params:
+        root: ${steps.root.outputs.root}
+        vm: ${ITEM.vm}
+        shard: ${ITEM.shard}
+        cpus: ${params.cpus}
+        ram: ${params.ram}
+        kernel: ${steps.inputs.outputs.kernel}
+        qemu: ${steps.inputs.outputs.qemu}
+        init: ${steps.inputs.outputs.init}
+        initrd: ${steps.inputs.outputs.initrd}
+        virtiofsd: ${steps.inputs.outputs.virtiofsd}
+        key: ${steps.key.outputs.key}
+        sections: ${params.sections}
+        groups: ${params.groups}
+        tests: ${params.tests}
+        iterations: ${params.iterations}
+        loop_on_fail: ${params.loop_on_fail}
+        stop_on_fail: ${params.stop_on_fail}
+        test_timeout: ${params.test_timeout}
+        notrun: ${params.notrun}
+    parallel:
+      items: ${steps.plan.outputs.guests}
+    continue_on: failed
+
+  - id: report
+    depends: guests
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/report --files "${steps.plan.outputs.reports}"
+      --output "$STATE/report.md"
+
+  - id: judge
+    depends: report
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/judge --report "$STATE/report.md"
+
+# Show what the host looks like after the run.
+handler_on:
+  exit:
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/host/check --output /dev/stdout
+
+---
+name: guest
+description: >-
+  Boot one guest, pick its shard of the tests and run each section in it,
+  one at a time.
+working_dir: ${params.root}
+
+params:
+  - name: root
+    description: the checkout the steps run from
+  - name: vm
+    description: the guest's name, qemu-system@<vm>.service
+  - name: shard
+    description: the guest's shard I/N of the tests, empty for all
+  - name: cpus
+    description: the guest's CPUs
+  - name: ram
+    description: the guest's memory in MiB
+  - name: kernel
+    description: the kernel store path
+  - name: qemu
+    description: the QEMU binary
+  - name: init
+    description: the closure's init
+  - name: initrd
+    description: the closure's initrd
+  - name: virtiofsd
+    description: the virtiofsd binary
+  - name: key
+    description: the private key that reaches the guest
+  - name: sections
+    description: the guest/xfs.config sections to run
+  - name: groups
+    description: fstests groups, or empty
+  - name: tests
+    description: a test list, or empty
+  - name: iterations
+    description: check's -I
+  - name: loop_on_fail
+    description: check's -L
+  - name: stop_on_fail
+    description: false turns -I into -i
+  - name: test_timeout
+    description: seconds a test may run
+  - name: notrun
+    description: the skips each section expects, empty for any
+
+env:
+  - XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}
+  - STATE: ${HOME}/.local/state/kdevops-ng-minimal-dagu
+  - VM_STATE: ${HOME}/.local/state/qemu-system/${params.vm}
+
+steps:
   - id: render
-    depends: [inputs, key]
     run: >-
       nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
-      --command steps/qsu/render --name fstests
-      --qemu ${steps.inputs.outputs.qemu}
-      --virtiofsd ${steps.inputs.outputs.virtiofsd}
-      --kernel ${steps.inputs.outputs.kernel}
-      --init ${steps.inputs.outputs.init}
-      --initrd ${steps.inputs.outputs.initrd}
-      --key ${steps.key.outputs.key}
-      --state "$VM_STATE" --qsu vendor/qemu-system-units
+      --command steps/qsu/render --name ${params.vm}
+      --cpus ${params.cpus} --ram ${params.ram}
+      --qemu ${params.qemu} --virtiofsd ${params.virtiofsd}
+      --kernel ${params.kernel} --init ${params.init} --initrd ${params.initrd}
+      --key ${params.key} --state "$VM_STATE" --qsu vendor/qemu-system-units
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: cid
@@ -129,18 +258,17 @@ steps:
     depends: render
     run: >-
       nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
-      --command steps/qsu/boot --name fstests --state "$VM_STATE"
-      --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid}
+      --command steps/qsu/boot --name ${params.vm} --state "$VM_STATE"
+      --key ${params.key} --cid ${steps.render.outputs.cid}
 
   - id: shard
     depends: boot
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/shard
-      --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid} --fstype xfs
+      --key ${params.key} --cid ${steps.render.outputs.cid} --fstype xfs
       --groups "${params.groups}" --tests "${params.tests}" --shard "${params.shard}"
-      --times guest/xfs.times
-      --output "$DAGU_OUTPUT_FILE"
+      --times guest/xfs.times --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: groups
       - name: tests
@@ -150,7 +278,7 @@ steps:
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/discover
-      --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid}
+      --key ${params.key} --cid ${steps.render.outputs.cid}
       --tests "${steps.shard.outputs.tests}" --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: kver
@@ -173,17 +301,19 @@ steps:
     outputs:
       - name: share
       - name: sections
+      - name: reports
 
   # One section at a time, each a run of the section DAG below; a failed
-  # section does not stop the next, and judge fails the run.
+  # section does not stop the next.
   - id: sections
     depends: configure
     action: dag.run
     with:
       dag: section
       params:
+        root: ${params.root}
         section: ${ITEM}
-        key: ${steps.key.outputs.key}
+        key: ${params.key}
         cid: ${steps.render.outputs.cid}
         devices: ${steps.discover.outputs.devices}
         kver: ${steps.discover.outputs.kver}
@@ -198,36 +328,29 @@ steps:
     depends: sections
     run: >-
       nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/report --sections "${steps.configure.outputs.sections}"
-      --share "$VM_STATE/xfstests" --kver ${steps.discover.outputs.kver}
+      --command steps/fstests/report --files "${steps.configure.outputs.reports}"
+      --output "$VM_STATE/xfstests/report.md"
 
-  - id: judge
-    depends: report
-    run: >-
-      nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/judge --report "$VM_STATE/xfstests/report.md"
-
-# Stop the guest, keep its console for a crash or hang, and show what the
-# host looks like after the run.
+# Stop the guest, keep its console for a crash or hang.
 handler_on:
   exit:
     run: |
       nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
-        --command systemctl --user stop qemu-system@fstests.service
+        --command systemctl --user stop qemu-system@${params.vm}.service
       nix develop --ignore-env --keep-env-var HOME \
-        --command steps/qsu/console --name fstests --since-file "$DAG_RUN_LOG_FILE" \
+        --command steps/qsu/console --name ${params.vm} --since-file "$DAG_RUN_WORK_DIR" \
         --file "$VM_STATE/xfstests/console.log"
-      nix develop --ignore-env --keep-env-var HOME \
-        --command steps/host/check --output /dev/stdout
 
 ---
 name: section
 description: >-
   Run one fstests section in the booted guest: wipe the disks, prepare the
   mount points, run xfstests@<section>.service and read its xunit report.
-working_dir: ..
+working_dir: ${params.root}
 
 params:
+  - name: root
+    description: the checkout the steps run from
   - name: section
     description: the guest/xfs.config section to run
   - name: key

@@ -18,15 +18,16 @@
 ## and, for N above 1, runs the list N times (-I, or -i when not stopping on
 ## failure); -L reruns a failed test N more times. The results an earlier run
 ## left under DIR/RELEASE/results for the sections that will run, and the
-## earlier DIR/report.md, are removed. Append share=DIR and sections=<the
-## ones to run> to FILE. kdevops-ng's f/fstests/render_config.py:
+## earlier DIR/report.md, are removed. Append share=DIR, sections=<the
+## ones to run> and reports=<the summary steps/fstests/collect writes for
+## each> to FILE. kdevops-ng's f/fstests/render_config.py:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/fstests/render --catalog guest/xfs.config \
 ##       --sections xfs_bs4k_ss4k --devices '/dev/nvme0n1 /dev/nvme1n1 /dev/nvme2n1' \
 ##       --sector 512 --tests 'generic/001 generic/002' --iterations 1 \
 ##       --loop-on-fail 0 --stop-on-fail true --test-timeout 600 --times guest/xfs.times \
-##       --share ~/.local/state/qemu-system/fstests/xfstests --kver 7.2.11 \
+##       --share ~/.local/state/qemu-system/fstests-1/xfstests --kver 7.2.11 \
 ##       --output /dev/stdout
 set -o errexit -o nounset -o pipefail
 
@@ -88,7 +89,7 @@ read -r -a devs <<<"$devices"
 set -o xtrace
 mkdir --parents "$share"
 rm --force "$share/report.md"
-run=()
+run=() reports=()
 for section in $sections; do
 	block=$(awk --assign want="[$section]" '/^\[/ { on = ($0 == want) } on' "$catalog")
 	mkfs=$(sed --quiet 's/^MKFS_OPTIONS=//p' <<<"$block")
@@ -135,6 +136,7 @@ for section in $sections; do
 	echo "wrote $share/$section.config $share/$section.env"
 	rm --recursive --force "${share:?}/${kver:?}/results/${section:?}"
 	run+=("$section")
+	reports+=("$share/$kver/results/$section/report.md")
 done
 if [ "${#run[@]}" -eq 0 ]; then
 	echo "every section was skipped" >&2
@@ -143,4 +145,5 @@ fi
 {
 	echo "share=$share"
 	echo "sections=${run[*]}"
+	echo "reports=${reports[*]}"
 } >>"$output"

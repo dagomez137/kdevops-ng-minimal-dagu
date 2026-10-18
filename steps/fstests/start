@@ -1,51 +1,96 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: copyleft-next-0.3.1
-## Usage: steps/fstests/start --key FILE --cid CID --section NAME --share DIR
-##            --kver RELEASE --timeout SEC --output FILE
+## Usage: steps/fstests/start --key FILE --cid CID --vm VM --section NAME
+##            --share DIR --kver RELEASE --timeout SEC --output FILE
 ##
-## Run fstests' section NAME in the guest: remove the section's previous
-## xunit report from the xfstests share DIR, start xfstests@NAME.service and
-## return when check has finished. The unit is a oneshot, so systemctl start
-## waits for it; check's verdict is the report under DIR/RELEASE/results/NAME,
-## read by steps/fstests/collect. Append outcome=<how the wait ended> to
-## FILE: finished when the start job ended, whatever check's exit status;
-## timed_out when it had not ended after SEC seconds, in which case the unit
-## is stopped; lost when the guest stopped answering. kdevops-ng's
+## Run fstests' section NAME in the guest VM: start xfstests@NAME.service
+## and return when check has finished. The unit is a oneshot, so systemctl
+## start waits for it; check's verdict is the report under
+## DIR/RELEASE/results/NAME, read by steps/fstests/collect. A fresh run (no
+## DIR/NAME.exclude) starts from no report at all; a resumed one keeps the
+## testcases earlier attempts appended to testcases.xml there
+## (XUNIT_TESTCASES). Write how the wait ended to outcome there and append
+## outcome=<it> to FILE: finished when the start job ended, whatever check's
+## exit status; timed_out when it had not ended after SEC seconds, in which
+## case the unit is stopped; lost when SSH dropped but the guest still
+## answers; crashed when the guest died or stopped answering. A crashed
+## guest is killed if QEMU still runs; the test it died in, the last one its
+## console names, is appended to testcases.xml as failed and to crashes;
+## every test in testcases.xml goes into DIR/NAME.exclude for the next
+## attempt to skip; and the file crashed marks that an attempt is due. With
+## -I or -i a resumed attempt skips every pass of those tests. kdevops-ng's
 ## f/fstests/start.py, wait.py and stop.py:
 ##
-##   nix develop --ignore-env --keep-env-var HOME \
+##   nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
 ##       --command steps/fstests/start \
 ##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242 \
-##       --section xfs_bs4k_ss4k --share ~/.local/state/qemu-system/fstests-1/xfstests \
+##       --vm fstests-1 --section xfs_bs4k_ss4k \
+##       --share ~/.local/state/qemu-system/fstests-1/xfstests \
 ##       --kver 7.2.11 --timeout 16200 --output /dev/stdout
 set -o errexit -o nounset -o pipefail
 
 while [ $# -gt 0 ]; do
 	case $1 in
-	--key | --cid | --section | --share | --kver | --timeout | --output)
+	--key | --cid | --vm | --section | --share | --kver | --timeout | --output)
 		declare "${1#--}=$2"
 		;;
 	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
 	esac
 	shift 2
 done
-: "${key:?} ${cid:?} ${section:?} ${share:?} ${kver:?} ${timeout:?} ${output:?}"
+: "${key:?} ${cid:?} ${vm:?} ${section:?} ${share:?} ${kver:?} ${timeout:?} ${output:?}"
 
-ssh=("$(dirname "$0")/../qsu/ssh" --key "$key" --cid "$cid" --)
+ssh=("$(dirname "$0")/../qsu/ssh" --key "$key" --cid "$cid")
 unit=xfstests@$section.service
+dir=${share:?}/${kver:?}/results/${section:?}
+exclude=$share/$section.exclude
 set -o xtrace
-rm --force "${share:?}/${kver:?}/results/${section:?}/result.xml"
+mkdir --parents "$dir"
+rm --force "$dir/result.xml" "$dir/crashed"
+if [ ! -e "$exclude" ]; then
+	rm --force "$dir/testcases.xml" "$dir/crashes"
+fi
+since=$(date +%s)
 status=0
-timeout --kill-after=30 "$timeout" "${ssh[@]}" systemctl start "$unit" || status=$?
+timeout --kill-after=30 "$timeout" "${ssh[@]}" -- systemctl start "$unit" || status=$?
 # systemctl start exits 1 when the job ended with the unit failed, 124 is
 # timeout's own status and 255 is ssh's.
 case $status in
 0 | 1) outcome=finished ;;
 124)
 	outcome=timed_out
-	"${ssh[@]}" systemctl stop "$unit" || true
+	"${ssh[@]}" -- systemctl stop "$unit" || true
 	;;
-*) outcome=lost ;;
+*)
+	if "${ssh[@]}" -- true; then outcome=lost; else outcome=crashed; fi
+	;;
 esac
+if [ "$outcome" = crashed ]; then
+	systemctl --user kill --signal=SIGKILL "qemu-system@$vm.service" || true
+	journal=$(journalctl --user-unit "qemu-system@$vm.service" --since "@$since" \
+		--output short-unix --no-pager)
+	# check names each test on the console as it starts it.
+	read -r began test < <(awk '
+		match($0, /xfstests\[[0-9]+\]: [a-z0-9]+\/[0-9]+ *$/) {
+			split(substr($0, RSTART), f, " "); began = $1; name = f[2]
+		}
+		END { printf "%d %s\n", began, name }' <<<"$journal")
+	why=$(grep --only-matching --max-count=1 'Kernel panic - not syncing: .*' <<<"$journal" |
+		tr --delete '"&<>') || why='the guest stopped answering'
+	if [ -n "$test" ] && ! grep --quiet --fixed-strings " name=\"$test\" " \
+		"$dir/testcases.xml" 2>/dev/null; then
+		{
+			printf '\t<testcase classname="xfstests.%s" name="%s" time="%d">\n' \
+				"$section" "$test" "$(($(date +%s) - began))"
+			printf '\t\t<failure message="the guest died: %s" type="TestFail" />\n' "$why"
+			printf '\t</testcase>\n'
+		} >>"$dir/testcases.xml"
+	fi
+	echo "${test:-before a test}: $why" >>"$dir/crashes"
+	grep --only-matching --perl-regexp '<testcase [^>]* name="\K[^"]+' \
+		"$dir/testcases.xml" >"$exclude" 2>/dev/null || touch "$exclude"
+	touch "$dir/crashed"
+fi
+echo "$outcome" >"$dir/outcome"
 echo "$section: $outcome, systemctl start exited $status"
 echo "outcome=$outcome" >>"$output"

@@ -10,17 +10,20 @@
 ## <section>.config, the section bound to the guest's disks DEVS (TEST_DEV,
 ## SCRATCH_DEV, LOGWRITES_DEV on the last disk, and the external rt or log
 ## device a section asks for), and <section>.env with HOST_OPTIONS, check's
-## arguments, RECREATE_TEST_DEV, TEST_TIMEOUT=SEC and TEST_TIMEOUTS, which
-## gives a test that took more than SEC/3 in the check.time-format FILE three
-## times its time, rounded up to 100 s. A section the disks cannot hold is
-## skipped with the reason. check runs either GROUPS (-g) or the test
-## list TESTS, or its auto group when both are empty, writes an xunit report
-## and, for N above 1, runs the list N times (-I, or -i when not stopping on
-## failure); -L reruns a failed test N more times. The results an earlier run
-## left under DIR/RELEASE/results for the sections that will run, and the
-## earlier DIR/report.md, are removed. Append share=DIR, sections=<the
-## ones to run> and reports=<the summary steps/fstests/collect writes for
-## each> to FILE. kdevops-ng's f/fstests/render_config.py:
+## arguments, XUNIT_TESTCASES, RECREATE_TEST_DEV, TEST_TIMEOUT=SEC and
+## TEST_TIMEOUTS, which gives a test that took more than SEC/3 in the
+## check.time-format FILE three times its time, rounded up to 100 s. check
+## skips the tests DIR/<section>.exclude lists, which steps/fstests/start
+## writes to resume a section after the guest died. A section the disks
+## cannot hold is skipped with the reason. check runs either GROUPS (-g) or
+## the test list TESTS, or its auto group when both are empty, writes an
+## xunit report and, for N above 1, runs the list N times (-I, or -i when
+## not stopping on failure); -L reruns a failed test N more times. The
+## results an earlier run left under DIR/RELEASE/results for the sections
+## that will run, their exclude lists and the earlier DIR/report.md are
+## removed. Append share=DIR, sections=<the ones to run> and reports=<the
+## summary steps/fstests/collect writes for each> to FILE. kdevops-ng's
+## f/fstests/render_config.py:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/fstests/render --catalog guest/xfs.config \
@@ -128,13 +131,14 @@ for section in $sections; do
 	} >"$share/$section.config"
 	{
 		echo "HOST_OPTIONS=/var/lib/xfstests/$section.config"
-		echo "XFSTESTS_CHECK_ARGS=${args[*]}"
+		echo "XFSTESTS_CHECK_ARGS=-E /var/lib/xfstests/$section.exclude ${args[*]}"
+		echo "XUNIT_TESTCASES=/var/lib/xfstests/$kver/results/$section/testcases.xml"
 		echo "RECREATE_TEST_DEV=true"
 		echo "TEST_TIMEOUT=$test_timeout"
 		echo "TEST_TIMEOUTS=$timeouts"
 	} >"$share/$section.env"
 	echo "wrote $share/$section.config $share/$section.env"
-	rm --recursive --force "${share:?}/${kver:?}/results/${section:?}"
+	rm --recursive --force "${share:?}/${kver:?}/results/${section:?}" "$share/$section.exclude"
 	run+=("$section")
 	reports+=("$share/$kver/results/$section/report.md")
 done

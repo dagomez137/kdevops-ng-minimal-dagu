@@ -89,8 +89,8 @@ takes every input as a long option, prints each command it runs
 | `steps/fstests/render` | `.#default` | `share`, `sections`, `reports`: each with its config and env on the share, its earlier results gone |
 | `steps/fstests/wipe` | `.#default` | the disks emptied, per section |
 | `steps/fstests/prepare` | `.#default` | the mount points, per section |
-| `steps/fstests/start` | `.#default` | `outcome`: `xfstests@<section>.service` run to its end, or stopped at the deadline |
-| `steps/fstests/collect` | `.#default` | `verdict`: from the outcome and the section's xunit report |
+| `steps/fstests/start` | `.#default` | `outcome`: `xfstests@<section>.service` run to its end, stopped at the deadline, or the guest died and the section's exclude list is written |
+| `steps/fstests/collect` | `.#default` | `verdict`: from the last outcome, the section's xunit report and the tests the guest died in |
 | `steps/fstests/report` | `.#default` | `report.md`: a guest's sections on its share, every guest's in the state directory |
 | `steps/fstests/judge` | `.#default` | fails unless every section passed |
 | `steps/qsu/console` | `.#default` | `console.log` on the share, the VM's console from the journal |
@@ -110,8 +110,14 @@ environment the host laid down on the share, formats the test device itself
 `TEST_TIMEOUT` seconds, or the test's own entry in `TEST_TIMEOUTS`, and
 writes an xunit report under `<kernel release>/results/<section>`. The SSH
 key reaches the guest as the `ssh.authorized_keys.root` credential on the
-kernel command line, so the closure carries no key. A kernel panic reboots the guest at once
-(`panic=-1`), which ends QEMU under `-no-reboot`.
+kernel command line, so the closure carries no key. An oops, or a task
+blocked for 300 s, panics the guest, and a panic ends QEMU under
+`-no-reboot`: no signal reaches a task in uninterruptible sleep, so after a
+deadlock only a reboot frees the test devices. The `section` DAG then
+boots the guest again and resumes the section without the tests already
+run, at most three attempts in all; check keeps each test's xunit record
+on the share (`XUNIT_TESTCASES`, a patch in `vendor/nixos-flake`), and the
+test the guest died in is recorded as failed with the panic message.
 
 `vendor/nixos-flake` and `vendor/qemu-system-units` are kdevops-ng's
 git-subrepo copies of

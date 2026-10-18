@@ -14,7 +14,9 @@
 ## the ssh.authorized_keys.root credential on the kernel command line. DIR is
 ## the unit's state directory and also holds the vars file and the NVMe
 ## drives. A kernel panic reboots the guest at once (panic=-1), which under
-## -no-reboot ends QEMU. Append cid=<vsock CID> to FILE:
+## -no-reboot ends QEMU; an oops, or a task blocked for 300 s, panics, as
+## no signal reaches a task in uninterruptible sleep and only a reboot
+## frees what it holds. Append cid=<vsock CID> to FILE:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
 ##       --command steps/qsu/render --name fstests-1 --cpus 4 --ram 4096 \
@@ -60,7 +62,7 @@ jq --null-input --arg name "$name" --arg qemu "$qemu" --arg virtiofsd "$virtiofs
 	cpus: $cpus,
 	kernel: {
 		image: "\($kernel)/bzImage",
-		append: "root=tmpfs console=ttyS0,115200 panic=-1 init=\($init) systemd.set_credential_binary=ssh.authorized_keys.root:\($credential)",
+		append: "root=tmpfs console=ttyS0,115200 panic=-1 oops=panic hung_task_panic=1 sysctl.kernel.hung_task_timeout_secs=300 init=\($init) systemd.set_credential_binary=ssh.authorized_keys.root:\($credential)",
 		initrd: $initrd
 	},
 	shares: [

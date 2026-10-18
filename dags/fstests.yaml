@@ -313,6 +313,7 @@ steps:
       params:
         root: ${params.root}
         section: ${ITEM}
+        vm: ${params.vm}
         key: ${params.key}
         cid: ${steps.render.outputs.cid}
         devices: ${steps.discover.outputs.devices}
@@ -344,8 +345,9 @@ handler_on:
 ---
 name: section
 description: >-
-  Run one fstests section in the booted guest: wipe the disks, prepare the
-  mount points, run xfstests@<section>.service and read its xunit report.
+  Run one fstests section in the booted guest, booting it again and
+  resuming the section after the tests already run when it dies, and read
+  its xunit report.
 working_dir: ${params.root}
 
 params:
@@ -353,6 +355,8 @@ params:
     description: the checkout the steps run from
   - name: section
     description: the guest/xfs.config section to run
+  - name: vm
+    description: the guest's name, qemu-system@<vm>.service
   - name: key
     description: the private key that reaches the guest
   - name: cid
@@ -367,7 +371,79 @@ params:
     description: the skips each section expects, empty for any
 
 steps:
+  # An attempt that leaves the crashed marker, as steps/fstests/start does
+  # when the guest dies, is followed by another, at most three in all.
+  - id: attempt
+    action: dag.run
+    with:
+      dag: attempt
+      params:
+        root: ${params.root}
+        section: ${params.section}
+        vm: ${params.vm}
+        key: ${params.key}
+        cid: ${params.cid}
+        devices: ${params.devices}
+        kver: ${params.kver}
+        share: ${params.share}
+    repeat_policy:
+      repeat: while
+      condition: test -e "${params.share}/${params.kver}/results/${params.section}/crashed"
+      limit: 3
+    continue_on: failed
+
+  - id: collect
+    depends: attempt
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/collect --section ${params.section}
+      --share ${params.share} --kver ${params.kver} --notrun "${params.notrun}"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: verdict
+
+---
+name: attempt
+description: >-
+  Boot the guest again when the last attempt left it dead, wipe the disks,
+  prepare the mount points and run xfstests@<section>.service.
+working_dir: ${params.root}
+
+params:
+  - name: root
+    description: the checkout the steps run from
+  - name: section
+    description: the guest/xfs.config section to run
+  - name: vm
+    description: the guest's name, qemu-system@<vm>.service
+  - name: key
+    description: the private key that reaches the guest
+  - name: cid
+    description: the guest's vsock CID
+  - name: devices
+    description: the guest's NVMe disks, in order
+  - name: kver
+    description: the guest's kernel release
+  - name: share
+    description: the xfstests share, with the section's config and results
+
+env:
+  - XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}
+  - VM_STATE: ${HOME}/.local/state/qemu-system/${params.vm}
+
+steps:
+  - id: boot
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+      --command steps/qsu/boot --name ${params.vm} --state "$VM_STATE"
+      --key ${params.key} --cid ${params.cid}
+    preconditions:
+      - condition: test -e "${params.share}/${params.kver}/results/${params.section}/crashed"
+    continue_on:
+      skipped: true
+
   - id: wipe
+    depends: boot
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/wipe --key ${params.key} --cid ${params.cid}
@@ -385,20 +461,9 @@ steps:
   - id: start
     depends: prepare
     run: >-
-      nix develop --ignore-env --keep-env-var HOME
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
       --command steps/fstests/start --key ${params.key} --cid ${params.cid}
-      --section ${params.section} --share ${params.share} --kver ${params.kver}
-      --timeout 16200 --output "$DAGU_OUTPUT_FILE"
+      --vm ${params.vm} --section ${params.section} --share ${params.share}
+      --kver ${params.kver} --timeout 16200 --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: outcome
-
-  - id: collect
-    depends: start
-    run: >-
-      nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/collect --section ${params.section}
-      --share ${params.share} --kver ${params.kver}
-      --outcome ${steps.start.outputs.outcome} --notrun "${params.notrun}"
-      --output "$DAGU_OUTPUT_FILE"
-    outputs:
-      - name: verdict

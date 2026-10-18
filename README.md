@@ -33,7 +33,9 @@ nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
 `groups` and `tests` exclude each other; `iterations` and `loop_on_fail`
 are check's `-I` and `-L`, `stop_on_fail=false` turns `-I` into `-i`, and
 `test_timeout` is the seconds systemd gives each test, three times its
-time in `guest/xfs.times` for a slower one.
+time in `guest/xfs.times` for a slower one. A section listed in `notrun`
+(`guest/xfs.notrun`) fails when it skips a test the list does not name for
+it, which is how a missing tool, kernel option or device shows up.
 
 The host needs `/dev/kvm`, `/dev/vhost-vsock` (the `vhost_vsock` module)
 and a `systemd --user` manager; the root step of

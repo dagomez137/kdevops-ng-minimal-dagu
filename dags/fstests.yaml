@@ -42,6 +42,10 @@ params:
   - name: test_timeout
     type: integer
     default: 600
+  # The skips a section expects, for kernel v7.2.11; a section listed there
+  # fails when it skips anything else. Empty accepts every skip.
+  - name: notrun
+    default: guest/xfs.notrun
 
 env:
   # Dagu hands steps a filtered environment; systemctl --user needs this.
@@ -184,6 +188,7 @@ steps:
         devices: ${steps.discover.outputs.devices}
         kver: ${steps.discover.outputs.kver}
         share: ${steps.configure.outputs.share}
+        notrun: ${params.notrun}
     parallel:
       items: ${steps.configure.outputs.sections}
       max_concurrent: 1
@@ -235,6 +240,8 @@ params:
     description: the guest's kernel release
   - name: share
     description: the xfstests share, with the section's config and results
+  - name: notrun
+    description: the skips each section expects, empty for any
 
 steps:
   - id: wipe
@@ -268,6 +275,7 @@ steps:
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/collect --section ${params.section}
       --share ${params.share} --kver ${params.kver}
-      --outcome ${steps.start.outputs.outcome} --output "$DAGU_OUTPUT_FILE"
+      --outcome ${steps.start.outputs.outcome} --notrun "${params.notrun}"
+      --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: verdict

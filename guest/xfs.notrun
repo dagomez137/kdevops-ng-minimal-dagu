@@ -1,0 +1,459 @@
+# Tests check is expected to skip, as "section test reason", from the
+# xunit reports of CI run 39111724933 (auto, kernel v7.2.11). Each reason
+# is the section's geometry, a device the guest lacks (zoned, external log
+# or rt, DAX), a feature XFS or this kernel does not have, or a test bug
+# (xfs/653); none is the guest's setup. steps/fstests/collect fails a
+# section that skips a test not listed here for it.
+xfs_bs4k_ss4k generic/018 Could not adequately fragment file
+xfs_bs4k_ss4k generic/205 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/206 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/216 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/217 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/218 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/220 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/222 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/227 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/229 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/238 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/368 filesystem doesn't support -o inlinecrypt
+xfs_bs4k_ss4k generic/369 filesystem doesn't support -o inlinecrypt
+xfs_bs4k_ss4k generic/395 No encryption support for xfs
+xfs_bs4k_ss4k generic/396 No encryption support for xfs
+xfs_bs4k_ss4k generic/397 No encryption support for xfs
+xfs_bs4k_ss4k generic/398 No encryption support for xfs
+xfs_bs4k_ss4k generic/399 No encryption support for xfs
+xfs_bs4k_ss4k generic/413 /dev/nvme1n1 xfs does not support -o dax
+xfs_bs4k_ss4k generic/419 No encryption support for xfs
+xfs_bs4k_ss4k generic/421 No encryption support for xfs
+xfs_bs4k_ss4k generic/429 No encryption support for xfs
+xfs_bs4k_ss4k generic/435 No encryption support for xfs
+xfs_bs4k_ss4k generic/440 No encryption support for xfs
+xfs_bs4k_ss4k generic/462 /dev/nvme1n1 xfs does not support -o dax
+xfs_bs4k_ss4k generic/470 /dev/mapper/logwrites-test xfs does not support -o dax
+xfs_bs4k_ss4k generic/487 This test requires a valid $SCRATCH_LOGDEV
+xfs_bs4k_ss4k generic/548 No encryption support for xfs
+xfs_bs4k_ss4k generic/549 No encryption support for xfs
+xfs_bs4k_ss4k generic/550 No encryption support for xfs
+xfs_bs4k_ss4k generic/556 xfs does not support casefold feature
+xfs_bs4k_ss4k generic/565 xfs does not support cross-device copy_file_range
+xfs_bs4k_ss4k generic/572 No verity support for xfs
+xfs_bs4k_ss4k generic/573 No verity support for xfs
+xfs_bs4k_ss4k generic/574 No verity support for xfs
+xfs_bs4k_ss4k generic/575 No verity support for xfs
+xfs_bs4k_ss4k generic/576 No verity support for xfs
+xfs_bs4k_ss4k generic/577 No verity support for xfs
+xfs_bs4k_ss4k generic/579 No verity support for xfs
+xfs_bs4k_ss4k generic/580 No encryption support for xfs
+xfs_bs4k_ss4k generic/581 No encryption support for xfs
+xfs_bs4k_ss4k generic/582 No encryption support for xfs
+xfs_bs4k_ss4k generic/583 No encryption support for xfs
+xfs_bs4k_ss4k generic/584 No encryption support for xfs
+xfs_bs4k_ss4k generic/592 No encryption support for xfs
+xfs_bs4k_ss4k generic/593 No encryption support for xfs
+xfs_bs4k_ss4k generic/595 No encryption support for xfs
+xfs_bs4k_ss4k generic/602 No encryption support for xfs
+xfs_bs4k_ss4k generic/605 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_bs4k_ss4k generic/606 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_bs4k_ss4k generic/608 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_bs4k_ss4k generic/613 No encryption support for xfs
+xfs_bs4k_ss4k generic/621 No encryption support for xfs
+xfs_bs4k_ss4k generic/624 No verity support for xfs
+xfs_bs4k_ss4k generic/625 No verity support for xfs
+xfs_bs4k_ss4k generic/641 Can't make filesystem block size < page size.
+xfs_bs4k_ss4k generic/651 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/652 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/653 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/654 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/655 Failed to format with small blocksize.
+xfs_bs4k_ss4k generic/679 not suitable for this filesystem type: xfs
+xfs_bs4k_ss4k generic/692 No verity support for xfs
+xfs_bs4k_ss4k generic/693 No encryption support for xfs
+xfs_bs4k_ss4k generic/700 Require selinux to be enabled
+xfs_bs4k_ss4k generic/739 No encryption support for xfs
+xfs_bs4k_ss4k generic/744 xfs does not support duplicate fsid
+xfs_bs4k_ss4k generic/766 This test requires a valid $SCRATCH_LOGDEV
+xfs_bs4k_ss4k generic/783 xfs does not support casefold feature
+xfs_bs4k_ss4k generic/788 No verity support for xfs
+xfs_bs4k_ss4k generic/793 this test requires a zoned block device
+xfs_bs4k_ss4k generic/801 xfs_io fwzero failed (old kernel/wrong fs?)
+xfs_bs4k_ss4k generic/804 scsi_debug corruption injection not supported
+xfs_bs4k_ss4k generic/808 No verity support for xfs
+xfs_bs4k_ss4k xfs/016 Cannot run this test using log MKFS_OPTIONS specified
+xfs_bs4k_ss4k xfs/035 No dump tape specified
+xfs_bs4k_ss4k xfs/040 Can't run libxfs-diff without KWORKAREA set
+xfs_bs4k_ss4k xfs/044 This test requires a valid $SCRATCH_LOGDEV
+xfs_bs4k_ss4k xfs/090 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/094 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/107 xfs_io allocsp failed (old kernel/wrong fs?)
+xfs_bs4k_ss4k xfs/122 struct size checks moved to libxfs/xfs_ondisk.h
+xfs_bs4k_ss4k xfs/142 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/143 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/146 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/147 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/186 attr v1 not supported on /dev/nvme1n1
+xfs_bs4k_ss4k xfs/187 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/189 noattr2 mount option no longer functional
+xfs_bs4k_ss4k xfs/196 XFS error injection drop_writes unknown on this kernel.
+xfs_bs4k_ss4k xfs/197 This test is only valid on 32 bit machines
+xfs_bs4k_ss4k xfs/244 16 bit project IDs not supported on /dev/nvme1n1
+xfs_bs4k_ss4k xfs/275 This test requires a valid $SCRATCH_LOGDEV
+xfs_bs4k_ss4k xfs/276 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/287 16 bit project IDs not supported on /dev/nvme1n1
+xfs_bs4k_ss4k xfs/300 SELinux not enabled
+xfs_bs4k_ss4k xfs/333 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/334 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/335 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/336 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/338 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/339 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/340 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/341 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/342 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/343 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/419 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/432 could not create dir extent > 1000 blocks
+xfs_bs4k_ss4k xfs/490 Require XFS built without CONFIG_XFS_DEBUG
+xfs_bs4k_ss4k xfs/521 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/528 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/530 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/541 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/550 /dev/nvme1n1 xfs does not support -o dax
+xfs_bs4k_ss4k xfs/551 /dev/nvme1n1 xfs does not support -o dax
+xfs_bs4k_ss4k xfs/552 /dev/nvme1n1 xfs does not support -o dax
+xfs_bs4k_ss4k xfs/596 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/610 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/617 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/635 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/636 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/637 this test requires a zoned block device
+xfs_bs4k_ss4k xfs/638 Requires zoned file system
+xfs_bs4k_ss4k xfs/639 Requires zoned file system
+xfs_bs4k_ss4k xfs/640 Requires zoned file system
+xfs_bs4k_ss4k xfs/641 Requires zoned file system
+xfs_bs4k_ss4k xfs/642 mount option not supported
+xfs_bs4k_ss4k xfs/643 mount option not supported
+xfs_bs4k_ss4k xfs/644 mount option not supported
+xfs_bs4k_ss4k xfs/646 Requires zoned file system
+xfs_bs4k_ss4k xfs/647 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/650 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/652 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/653 cannot mkfs zoned filesystem
+xfs_bs4k_ss4k xfs/668 this test requires a zoned block device
+xfs_bs4k_ss4k xfs/670 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/672 XFS error injection wb_cow_convert_error unknown on this kernel.
+xfs_bs4k_ss4k xfs/675 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/732 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/817 realtime not supported by scratch filesystem type: xfs
+xfs_bs4k_ss4k xfs/821 realtime not supported by scratch filesystem type: xfs
+xfs_bs4k_ss4k xfs/837 External volumes not in use, skipped this test
+xfs_bs4k_ss4k xfs/838 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k generic/018 Could not adequately fragment file
+xfs_full_bs16k_ss16k generic/031 /media/scratch: file alloc unit 16384 larger than op length 4096
+xfs_full_bs16k_ss16k generic/205 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/206 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/216 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/217 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/218 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/220 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/222 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/223 _scratch_mkfs_xfs: block size 4096 cannot be smaller than sector size 16384
+xfs_full_bs16k_ss16k generic/227 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/229 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/238 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/356 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/357 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/368 filesystem doesn't support -o inlinecrypt
+xfs_full_bs16k_ss16k generic/369 filesystem doesn't support -o inlinecrypt
+xfs_full_bs16k_ss16k generic/370 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/395 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/396 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/397 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/398 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/399 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/413 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs16k_ss16k generic/419 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/421 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/429 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/435 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/440 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/462 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs16k_ss16k generic/470 /dev/mapper/logwrites-test xfs does not support -o dax
+xfs_full_bs16k_ss16k generic/472 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/487 This test requires a valid $SCRATCH_LOGDEV
+xfs_full_bs16k_ss16k generic/493 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/494 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/495 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/496 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/497 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/503 file block size must match page size
+xfs_full_bs16k_ss16k generic/546 /media/scratch: file alloc unit 16384 larger than op length 4096
+xfs_full_bs16k_ss16k generic/548 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/549 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/550 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/554 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/556 xfs does not support casefold feature
+xfs_full_bs16k_ss16k generic/565 xfs does not support cross-device copy_file_range
+xfs_full_bs16k_ss16k generic/569 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/572 No verity support for xfs
+xfs_full_bs16k_ss16k generic/573 No verity support for xfs
+xfs_full_bs16k_ss16k generic/574 No verity support for xfs
+xfs_full_bs16k_ss16k generic/575 No verity support for xfs
+xfs_full_bs16k_ss16k generic/576 No verity support for xfs
+xfs_full_bs16k_ss16k generic/577 No verity support for xfs
+xfs_full_bs16k_ss16k generic/579 No verity support for xfs
+xfs_full_bs16k_ss16k generic/580 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/581 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/582 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/583 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/584 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/592 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/593 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/595 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/602 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/605 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_full_bs16k_ss16k generic/606 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_full_bs16k_ss16k generic/608 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_full_bs16k_ss16k generic/613 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/621 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/624 No verity support for xfs
+xfs_full_bs16k_ss16k generic/625 No verity support for xfs
+xfs_full_bs16k_ss16k generic/636 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/641 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/643 swapfiles are not supported
+xfs_full_bs16k_ss16k generic/651 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/652 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/653 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/654 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/655 Failed to format with small blocksize.
+xfs_full_bs16k_ss16k generic/679 not suitable for this filesystem type: xfs
+xfs_full_bs16k_ss16k generic/692 No verity support for xfs
+xfs_full_bs16k_ss16k generic/693 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/700 Require selinux to be enabled
+xfs_full_bs16k_ss16k generic/711 failed to swapon
+xfs_full_bs16k_ss16k generic/739 No encryption support for xfs
+xfs_full_bs16k_ss16k generic/744 xfs does not support duplicate fsid
+xfs_full_bs16k_ss16k generic/752 failed to swapon
+xfs_full_bs16k_ss16k generic/766 This test requires a valid $SCRATCH_LOGDEV
+xfs_full_bs16k_ss16k generic/769 test requires atomic writes down to 4k
+xfs_full_bs16k_ss16k generic/770 test requires atomic writes down to 4k
+xfs_full_bs16k_ss16k generic/783 xfs does not support casefold feature
+xfs_full_bs16k_ss16k generic/788 No verity support for xfs
+xfs_full_bs16k_ss16k generic/793 this test requires a zoned block device
+xfs_full_bs16k_ss16k generic/801 xfs_io fwzero failed (old kernel/wrong fs?)
+xfs_full_bs16k_ss16k generic/804 scsi_debug corruption injection not supported
+xfs_full_bs16k_ss16k generic/808 No verity support for xfs
+xfs_full_bs16k_ss16k xfs/016 Cannot run this test using log MKFS_OPTIONS specified
+xfs_full_bs16k_ss16k xfs/035 No dump tape specified
+xfs_full_bs16k_ss16k xfs/040 Can't run libxfs-diff without KWORKAREA set
+xfs_full_bs16k_ss16k xfs/044 This test requires a valid $SCRATCH_LOGDEV
+xfs_full_bs16k_ss16k xfs/090 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/094 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/107 xfs_io allocsp failed (old kernel/wrong fs?)
+xfs_full_bs16k_ss16k xfs/122 struct size checks moved to libxfs/xfs_ondisk.h
+xfs_full_bs16k_ss16k xfs/142 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/143 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/146 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/147 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/176 Could not create a sparse inode cluster
+xfs_full_bs16k_ss16k xfs/186 attr v1 not supported on /dev/nvme1n1
+xfs_full_bs16k_ss16k xfs/187 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/189 noattr2 mount option no longer functional
+xfs_full_bs16k_ss16k xfs/196 XFS error injection drop_writes unknown on this kernel.
+xfs_full_bs16k_ss16k xfs/197 This test is only valid on 32 bit machines
+xfs_full_bs16k_ss16k xfs/244 16 bit project IDs not supported on /dev/nvme1n1
+xfs_full_bs16k_ss16k xfs/275 This test requires a valid $SCRATCH_LOGDEV
+xfs_full_bs16k_ss16k xfs/276 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/287 16 bit project IDs not supported on /dev/nvme1n1
+xfs_full_bs16k_ss16k xfs/300 SELinux not enabled
+xfs_full_bs16k_ss16k xfs/333 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/334 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/335 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/336 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/338 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/339 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/340 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/341 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/342 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/343 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/419 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/432 could not create dir extent > 1000 blocks
+xfs_full_bs16k_ss16k xfs/490 Require XFS built without CONFIG_XFS_DEBUG
+xfs_full_bs16k_ss16k xfs/521 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/528 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/530 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/541 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/550 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs16k_ss16k xfs/551 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs16k_ss16k xfs/552 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs16k_ss16k xfs/596 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/604 Not enough space on device for falloc_size=84.70GB and bs=16384
+xfs_full_bs16k_ss16k xfs/610 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/617 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/635 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/636 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/637 this test requires a zoned block device
+xfs_full_bs16k_ss16k xfs/638 Requires zoned file system
+xfs_full_bs16k_ss16k xfs/639 Requires zoned file system
+xfs_full_bs16k_ss16k xfs/640 Requires zoned file system
+xfs_full_bs16k_ss16k xfs/641 Requires zoned file system
+xfs_full_bs16k_ss16k xfs/642 mount option not supported
+xfs_full_bs16k_ss16k xfs/643 mount option not supported
+xfs_full_bs16k_ss16k xfs/644 mount option not supported
+xfs_full_bs16k_ss16k xfs/646 Requires zoned file system
+xfs_full_bs16k_ss16k xfs/647 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/650 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/652 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/653 cannot mkfs zoned filesystem
+xfs_full_bs16k_ss16k xfs/668 this test requires a zoned block device
+xfs_full_bs16k_ss16k xfs/670 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/672 XFS error injection wb_cow_convert_error unknown on this kernel.
+xfs_full_bs16k_ss16k xfs/675 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/732 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/817 realtime not supported by scratch filesystem type: xfs
+xfs_full_bs16k_ss16k xfs/818 source filesystem was too large
+xfs_full_bs16k_ss16k xfs/821 realtime not supported by scratch filesystem type: xfs
+xfs_full_bs16k_ss16k xfs/837 External volumes not in use, skipped this test
+xfs_full_bs16k_ss16k xfs/838 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k generic/018 Could not adequately fragment file
+xfs_full_bs4k_ss4k generic/205 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/206 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/216 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/217 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/218 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/220 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/222 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/227 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/229 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/238 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/368 filesystem doesn't support -o inlinecrypt
+xfs_full_bs4k_ss4k generic/369 filesystem doesn't support -o inlinecrypt
+xfs_full_bs4k_ss4k generic/395 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/396 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/397 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/398 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/399 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/413 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs4k_ss4k generic/419 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/421 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/429 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/435 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/440 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/462 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs4k_ss4k generic/470 /dev/mapper/logwrites-test xfs does not support -o dax
+xfs_full_bs4k_ss4k generic/487 This test requires a valid $SCRATCH_LOGDEV
+xfs_full_bs4k_ss4k generic/548 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/549 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/550 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/556 xfs does not support casefold feature
+xfs_full_bs4k_ss4k generic/565 xfs does not support cross-device copy_file_range
+xfs_full_bs4k_ss4k generic/572 No verity support for xfs
+xfs_full_bs4k_ss4k generic/573 No verity support for xfs
+xfs_full_bs4k_ss4k generic/574 No verity support for xfs
+xfs_full_bs4k_ss4k generic/575 No verity support for xfs
+xfs_full_bs4k_ss4k generic/576 No verity support for xfs
+xfs_full_bs4k_ss4k generic/577 No verity support for xfs
+xfs_full_bs4k_ss4k generic/579 No verity support for xfs
+xfs_full_bs4k_ss4k generic/580 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/581 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/582 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/583 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/584 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/592 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/593 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/595 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/602 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/605 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_full_bs4k_ss4k generic/606 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_full_bs4k_ss4k generic/608 /dev/nvme1n1 xfs does not support -o dax=always
+xfs_full_bs4k_ss4k generic/613 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/621 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/624 No verity support for xfs
+xfs_full_bs4k_ss4k generic/625 No verity support for xfs
+xfs_full_bs4k_ss4k generic/641 Can't make filesystem block size < page size.
+xfs_full_bs4k_ss4k generic/651 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/652 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/653 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/654 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/655 Failed to format with small blocksize.
+xfs_full_bs4k_ss4k generic/679 not suitable for this filesystem type: xfs
+xfs_full_bs4k_ss4k generic/692 No verity support for xfs
+xfs_full_bs4k_ss4k generic/693 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/700 Require selinux to be enabled
+xfs_full_bs4k_ss4k generic/739 No encryption support for xfs
+xfs_full_bs4k_ss4k generic/744 xfs does not support duplicate fsid
+xfs_full_bs4k_ss4k generic/766 This test requires a valid $SCRATCH_LOGDEV
+xfs_full_bs4k_ss4k generic/783 xfs does not support casefold feature
+xfs_full_bs4k_ss4k generic/788 No verity support for xfs
+xfs_full_bs4k_ss4k generic/793 this test requires a zoned block device
+xfs_full_bs4k_ss4k generic/801 xfs_io fwzero failed (old kernel/wrong fs?)
+xfs_full_bs4k_ss4k generic/804 scsi_debug corruption injection not supported
+xfs_full_bs4k_ss4k generic/808 No verity support for xfs
+xfs_full_bs4k_ss4k xfs/016 Cannot run this test using log MKFS_OPTIONS specified
+xfs_full_bs4k_ss4k xfs/035 No dump tape specified
+xfs_full_bs4k_ss4k xfs/040 Can't run libxfs-diff without KWORKAREA set
+xfs_full_bs4k_ss4k xfs/044 This test requires a valid $SCRATCH_LOGDEV
+xfs_full_bs4k_ss4k xfs/090 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/094 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/107 xfs_io allocsp failed (old kernel/wrong fs?)
+xfs_full_bs4k_ss4k xfs/122 struct size checks moved to libxfs/xfs_ondisk.h
+xfs_full_bs4k_ss4k xfs/142 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/143 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/146 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/147 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/186 attr v1 not supported on /dev/nvme1n1
+xfs_full_bs4k_ss4k xfs/187 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/189 noattr2 mount option no longer functional
+xfs_full_bs4k_ss4k xfs/196 XFS error injection drop_writes unknown on this kernel.
+xfs_full_bs4k_ss4k xfs/197 This test is only valid on 32 bit machines
+xfs_full_bs4k_ss4k xfs/244 16 bit project IDs not supported on /dev/nvme1n1
+xfs_full_bs4k_ss4k xfs/275 This test requires a valid $SCRATCH_LOGDEV
+xfs_full_bs4k_ss4k xfs/276 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/287 16 bit project IDs not supported on /dev/nvme1n1
+xfs_full_bs4k_ss4k xfs/300 SELinux not enabled
+xfs_full_bs4k_ss4k xfs/333 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/334 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/335 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/336 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/338 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/339 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/340 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/341 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/342 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/343 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/419 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/432 could not create dir extent > 1000 blocks
+xfs_full_bs4k_ss4k xfs/490 Require XFS built without CONFIG_XFS_DEBUG
+xfs_full_bs4k_ss4k xfs/521 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/528 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/530 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/541 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/550 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs4k_ss4k xfs/551 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs4k_ss4k xfs/552 /dev/nvme1n1 xfs does not support -o dax
+xfs_full_bs4k_ss4k xfs/596 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/610 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/617 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/635 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/636 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/637 this test requires a zoned block device
+xfs_full_bs4k_ss4k xfs/638 Requires zoned file system
+xfs_full_bs4k_ss4k xfs/639 Requires zoned file system
+xfs_full_bs4k_ss4k xfs/640 Requires zoned file system
+xfs_full_bs4k_ss4k xfs/641 Requires zoned file system
+xfs_full_bs4k_ss4k xfs/642 mount option not supported
+xfs_full_bs4k_ss4k xfs/643 mount option not supported
+xfs_full_bs4k_ss4k xfs/644 mount option not supported
+xfs_full_bs4k_ss4k xfs/646 Requires zoned file system
+xfs_full_bs4k_ss4k xfs/647 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/650 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/652 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/653 cannot mkfs zoned filesystem
+xfs_full_bs4k_ss4k xfs/668 this test requires a zoned block device
+xfs_full_bs4k_ss4k xfs/670 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/672 XFS error injection wb_cow_convert_error unknown on this kernel.
+xfs_full_bs4k_ss4k xfs/675 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/732 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/817 realtime not supported by scratch filesystem type: xfs
+xfs_full_bs4k_ss4k xfs/821 realtime not supported by scratch filesystem type: xfs
+xfs_full_bs4k_ss4k xfs/837 External volumes not in use, skipped this test
+xfs_full_bs4k_ss4k xfs/838 External volumes not in use, skipped this test

@@ -57,6 +57,7 @@
             pkgs.procps
             pkgs.systemd
             pkgs.util-linux
+            pkgs.zstd
           ];
         };
 

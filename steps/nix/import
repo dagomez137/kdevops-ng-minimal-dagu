@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/nix/import --from DIR --state STATE
+##
+## Take what steps/nix/export wrote to DIR in place of a build: realise every
+## store path DIR/paths lists, with DIR/cache as a substituter beside
+## cache.nixos.org (Nix accepts it only from a trusted user), unpack QEMU
+## into STATE/qemu and install the build manifest as STATE/build.env:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/nix/import --from /tmp/prebuilt \
+##       --state ~/.local/state/kdevops-ng-minimal-dagu
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--from | --state) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${from:?} ${state:?}"
+
+set -o xtrace
+mkdir --parents "$state/prebuilt"
+mapfile -t paths <"$from/paths"
+nix build --extra-substituters "file://$from/cache?trusted=true" \
+	--out-link "$state/prebuilt/path" "${paths[@]}"
+rm --recursive --force "$state/qemu"
+mkdir --parents "$state/qemu"
+tar --extract --zstd --file "$from/qemu.tar.zst" --directory "$state/qemu"
+cp "$from/build.env" "$state/build.env"

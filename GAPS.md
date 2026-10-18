@@ -101,9 +101,9 @@ QEMU and evaluates the closure again: 29m16s of the first CI job, against
 
 **Cachix needs a known store path.** The kernel enters the store with
 `nix store add-path`, so no derivation names it and a fresh runner cannot
-ask a binary cache for "v7.2.11 with this config". Inside one workflow a
-build job can hand the path to test jobs; across workflows it needs
-kdevops-ng's identity index or a kernel derivation.
+ask a binary cache for "v7.2.11 with this config". Inside one workflow the
+build job hands the path to the test jobs in an artifact; across workflows
+it needs kdevops-ng's identity index or a kernel derivation.
 
 **The guest has no readiness signal.** QEMU does not implement
 `sd_notify()`, so `qemu-system@.service` is active as soon as QEMU runs,

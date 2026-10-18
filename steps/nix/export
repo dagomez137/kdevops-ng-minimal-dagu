@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/nix/export --manifest FILE --qemu DIR --shell PATH --dir OUT
+##
+## Write into OUT what another host needs to run the fstests DAG without
+## building: the build manifest FILE, QEMU's install tree DIR as
+## qemu.tar.zst, and a binary cache OUT/cache holding the closure of every
+## store path the manifest, QEMU and the devShell PATH name, less what
+## cache.nixos.org already serves. OUT/paths lists the paths steps/nix/import
+## realises:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/nix/export \
+##       --manifest ~/.local/state/kdevops-ng-minimal-dagu/build.env \
+##       --qemu ~/.local/state/kdevops-ng-minimal-dagu/qemu/install \
+##       --shell "$(nix build --no-link --print-out-paths .#devShells.x86_64-linux.default)" \
+##       --dir /tmp/prebuilt
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--manifest | --qemu | --shell | --dir) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${manifest:?} ${qemu:?} ${shell:?} ${dir:?}"
+
+set -o xtrace
+rm --recursive --force "$dir"
+mkdir --parents "$dir"
+cp "$manifest" "$dir/build.env"
+tar --create --zstd --file "$dir/qemu.tar.zst" --directory "$(dirname "$qemu")" \
+	"$(basename "$qemu")"
+# QEMU links against the qemu devShell's libraries by RUNPATH; the store
+# paths its files name are the ones it needs, as Nix's own reference scan.
+{
+	grep --only-matching --no-filename '/nix/store/[0-9a-z]\{32\}-[^/"]*' "$manifest"
+	grep --recursive --only-matching --no-filename --text \
+		'/nix/store/[0-9a-z]\{32\}-[^/[:space:][:cntrl:]"]*' "$qemu"
+	echo "$shell"
+} | sort --unique | xargs nix path-info >"$dir/paths"
+mapfile -t paths <"$dir/paths"
+mapfile -t closure < <(nix path-info --recursive "${paths[@]}")
+# nix path-info --json prints null for a path the store does not hold.
+mapfile -t missing < <(nix path-info --store https://cache.nixos.org --json "${closure[@]}" \
+	2>/dev/null | jq --raw-output 'to_entries[] | select(.value == null) | .key')
+nix copy --to "file://$dir/cache?compression=zstd" "${missing[@]}"
+echo "exported ${#missing[@]} of ${#closure[@]} store paths"
+du --summarize --human-readable "$dir"

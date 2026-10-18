@@ -45,9 +45,11 @@ its units under `~/.config/systemd`.
 
 ## Steps
 
-`dags/fstests.yaml` wires the executables under `steps/`, and runs the
-per-section ones from its `section` DAG, once per section and one section
-at a time. Each takes every input as a long option, prints each command it
+`dags/fstests.yaml` wires the executables under `steps/`: it runs
+`dags/build.yaml` for the kernel, QEMU, the closure and virtiofsd, or with
+`prebuilt=DIR` imports what that DAG's `export=DIR` wrote on another host,
+and runs the per-section steps from its `section` DAG, once per section and
+one section at a time. Each takes every input as a long option, prints each command it
 runs (`set -o xtrace`) and
 appends its result as `name=value` lines to the `--output` file, which is
 Dagu's `$DAGU_OUTPUT_FILE` in a run and `/dev/stdout` by hand. `--help`, or
@@ -59,6 +61,8 @@ any unknown option, prints the usage with a by-hand example:
 | `steps/kernel/build` | `.#kernel` | `kernel`: a store path with `bzImage` and `lib/modules` |
 | `steps/qemu/build` | `.#qemu` | `qemu`: the `qemu-system-x86_64` binary |
 | `steps/nix/closure` | `.#default` | `init`, `initrd`: from the closure's bootspec |
+| `steps/nix/export` | `.#default` | a binary cache, QEMU and `build.env` in a directory another host imports |
+| `steps/nix/import` | `.#default` | the exported store paths realised, QEMU and `build.env` in place |
 | `steps/ssh/key` | `.#default` | `key`: the private key that reaches the guest |
 | `steps/qsu/render` | `.#default` | `cid`; the `qemu-system@fstests.service` units |
 | `steps/qsu/boot` | `.#default` | the guest up and answering over SSH |

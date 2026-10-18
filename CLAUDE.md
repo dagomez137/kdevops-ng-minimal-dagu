@@ -7,8 +7,10 @@ it runs.
 
 ## Scope
 
-The fast path only. One DAG, one guest, no reuse, no peers, no form beyond
-the DAG's parameters: the sources, the sections and what check runs. A
+The fast path only. One DAG and the build DAG it runs (CI builds once per
+workflow and hands the result to its test jobs), one guest, no reuse across
+runs, no peers, no form beyond the DAG's parameters: the sources, the
+sections and what check runs. A
 setting is a constant in the file that uses it until a second value is
 needed. Dagu stays vanilla: a gap in Dagu is recorded, not patched.
 

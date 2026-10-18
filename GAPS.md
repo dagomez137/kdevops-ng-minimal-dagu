@@ -144,8 +144,9 @@ sandbox and starts the runner user's systemd manager through lingering. It
 is the one exception to the user-mode rule, scoped in `CLAUDE.md`.
 
 **6 h per job.** `auto` on one section takes about 6 h on a runner, so
-the workflow builds once and runs each section in 6 shards of about 70
-min, 18 jobs plus smoke, under the 20 a Free account runs at a time.
+the workflow builds once and runs each section in 6 shards, 18 jobs plus
+smoke, under the 20 a Free account runs at a time; two guests per runner
+bring a shard from about 60 to about 40 min.
 
 **Logs need a token.** Anonymous API calls can read job and step status but
 get 403 for step logs and artifacts, even on a public repository; the job

@@ -11,20 +11,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  fstests:
+  # Builds once and exports the result; every fstests job boots that.
+  build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 350
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: smoke
-            groups: ""
-            tests: generic/001 generic/002 generic/003 generic/004 generic/005
-          - name: quick
-            groups: quick
-            tests: ""
-    name: fstests (${{ matrix.name }})
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
 
@@ -50,11 +40,99 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Run the build DAG
+        run: >-
+          nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+          --command dagu --config config.yaml start build --
+          "export=$RUNNER_TEMP/prebuilt"
+
+      - name: Show the run
+        if: always()
+        run: >-
+          nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+          --command dagu --config config.yaml status build
+
+      # The cache is zstd already.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prebuilt
+          path: ${{ runner.temp }}/prebuilt
+          compression-level: 0
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: build-logs
+          path: ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
+          if-no-files-found: ignore
+
+      # The tree nix store add-path took, to compare against another host's
+      # build of the same tag byte for byte.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: kernel
+          path: ~/.local/state/kdevops-ng-minimal-dagu/linux/out
+          if-no-files-found: ignore
+
+  fstests:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        section: [xfs_bs4k_ss4k, xfs_full_bs4k_ss4k, xfs_full_bs16k_ss16k]
+        shard: [1/4, 2/4, 3/4, 4/4]
+        groups: [auto]
+        tests: [""]
+        include:
+          - section: xfs_bs4k_ss4k
+            shard: ""
+            groups: ""
+            tests: generic/001 generic/002 generic/003 generic/004 generic/005
+    name: fstests (${{ matrix.section }} ${{ matrix.shard || 'smoke' }})
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: prebuilt
+          path: ${{ runner.temp }}/prebuilt
+
+      - name: Prepare the runner (root)
+        run: |
+          set -o xtrace
+          sudo modprobe vhost_vsock
+          printf '%s\n' \
+            'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            'KERNEL=="vhost-vsock", GROUP="kvm", MODE="0666", OPTIONS+="static_node=vhost-vsock"' |
+            sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm --name-match=vhost-vsock
+          ls --format=long /dev/kvm /dev/vhost-vsock
+          # virtiofsd's namespace sandbox maps the runner user to root in a
+          # user namespace, which Ubuntu's AppArmor refuses by default.
+          sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id --user).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id --user)" >>"$GITHUB_ENV"
+
+      # The exported cache is unsigned; Nix takes it from a trusted user.
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            trusted-users = root runner
+            extra-substituters = file://${{ runner.temp }}/prebuilt/cache?trusted=true
+
       - name: Run the DAG
         run: >-
           nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
           --command dagu --config config.yaml start fstests --
-          "groups=${{ matrix.groups }}" "tests=${{ matrix.tests }}"
+          "prebuilt=$RUNNER_TEMP/prebuilt" "sections=${{ matrix.section }}"
+          "shard=${{ matrix.shard }}" "groups=${{ matrix.groups }}" "tests=${{ matrix.tests }}"
 
       - name: Show the run
         if: always()
@@ -71,17 +149,8 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: fstests-${{ matrix.name }}
+          name: fstests-${{ strategy.job-index }}-${{ matrix.section }}
           path: |
             ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
             ~/.local/state/qemu-system/fstests/xfstests
-          if-no-files-found: ignore
-
-      # The tree nix store add-path took, to compare against another host's
-      # build of the same tag byte for byte.
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: kernel-${{ matrix.name }}
-          path: ~/.local/state/kdevops-ng-minimal-dagu/linux/out
           if-no-files-found: ignore

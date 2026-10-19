@@ -71,32 +71,22 @@
           ];
         };
 
-        kernel = pkgs.mkShell {
-          # zlib for gendwarfksyms and resolve_btfids' libbpf, Python for
-          # libbpf's bpf_doc.py, matrixExtras for CONFIG_RUST.
-          packages =
-            toolchain.kernel
-            ++ toolchain.matrixExtras
-            ++ [
-              pkgs.git
-              pkgs.nix
-              pkgs.python3
-              pkgs.zlib
-            ];
-          # CONFIG_RUST builds core and alloc from source.
-          env = env // {
-            RUST_LIB_SRC = pkgs.rustPlatform.rustLibSrc;
-          };
+        # kdevops-ng's build-kernel: its toolchain (GCC, and LLVM for
+        # compiler=clang), ccache, the hook that pins $out and the random
+        # seed for reproducible builds, and the hook that finds the unwrapped
+        # clang. The steps also run nix, Python (gen_compile_commands.py,
+        # libbpf's bpf_doc.py) and git without the user's configuration;
+        # gendwarfksyms and resolve_btfids' libbpf build against zlib.
+        kernel = nixos-flake.devShells.${system}.build-kernel.overrideAttrs (old: {
+          nativeBuildInputs = old.nativeBuildInputs ++ [
+            pkgs.nix
+            pkgs.python3
+          ];
+          buildInputs = old.buildInputs ++ [ pkgs.zlib ];
+          inherit (env) GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM NIX_SSL_CERT_FILE;
           hardeningDisable = [ "all" ];
-          # mkShell derives $out from the working directory and the compiler
-          # wrappers put it in -frandom-seed and -L$out/lib, so pin both for
-          # the build to be the same from any directory and host.
-          shellHook = shellHook + ''
-            export NIX_CFLAGS_COMPILE="$(sed --regexp-extended 's,-frandom-seed=[^ ]*,-frandom-seed=reproducible,g' <<< "$NIX_CFLAGS_COMPILE")"
-            export NIX_CFLAGS_COMPILE="''${NIX_CFLAGS_COMPILE//$out//build-shell}"
-            export NIX_LDFLAGS="''${NIX_LDFLAGS//$out//build-shell}"
-          '';
-        };
+          shellHook = old.shellHook + shellHook;
+        });
 
         # QEMU's configure builds a Python venv offline, from the setuptools,
         # wheel and pip it finds.

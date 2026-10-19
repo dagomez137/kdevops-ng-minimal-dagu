@@ -1,5 +1,5 @@
 # Tests check is expected to skip, as "section test reason", from the
-# xunit reports of CI run 39111724933 (auto, kernel v7.2.11). Each reason
+# xunit reports of CI run 39247894711 (auto, kernel v7.3). Each reason
 # is the section's geometry, a device the guest lacks (zoned, external log
 # or rt, DAX), a feature XFS or this kernel does not have, or a test bug
 # (xfs/653); none is the guest's setup. steps/fstests/report fails a
@@ -75,7 +75,6 @@ xfs_bs4k_ss4k generic/766 This test requires a valid $SCRATCH_LOGDEV
 xfs_bs4k_ss4k generic/783 xfs does not support casefold feature
 xfs_bs4k_ss4k generic/788 No verity support for xfs
 xfs_bs4k_ss4k generic/793 this test requires a zoned block device
-xfs_bs4k_ss4k generic/801 xfs_io fwzero failed (old kernel/wrong fs?)
 xfs_bs4k_ss4k generic/804 scsi_debug corruption injection not supported
 xfs_bs4k_ss4k generic/808 No verity support for xfs
 xfs_bs4k_ss4k xfs/016 Cannot run this test using log MKFS_OPTIONS specified
@@ -239,7 +238,6 @@ xfs_full_bs16k_ss16k generic/770 test requires atomic writes down to 4k
 xfs_full_bs16k_ss16k generic/783 xfs does not support casefold feature
 xfs_full_bs16k_ss16k generic/788 No verity support for xfs
 xfs_full_bs16k_ss16k generic/793 this test requires a zoned block device
-xfs_full_bs16k_ss16k generic/801 xfs_io fwzero failed (old kernel/wrong fs?)
 xfs_full_bs16k_ss16k generic/804 scsi_debug corruption injection not supported
 xfs_full_bs16k_ss16k generic/808 No verity support for xfs
 xfs_full_bs16k_ss16k xfs/016 Cannot run this test using log MKFS_OPTIONS specified
@@ -385,7 +383,6 @@ xfs_full_bs4k_ss4k generic/766 This test requires a valid $SCRATCH_LOGDEV
 xfs_full_bs4k_ss4k generic/783 xfs does not support casefold feature
 xfs_full_bs4k_ss4k generic/788 No verity support for xfs
 xfs_full_bs4k_ss4k generic/793 this test requires a zoned block device
-xfs_full_bs4k_ss4k generic/801 xfs_io fwzero failed (old kernel/wrong fs?)
 xfs_full_bs4k_ss4k generic/804 scsi_debug corruption injection not supported
 xfs_full_bs4k_ss4k generic/808 No verity support for xfs
 xfs_full_bs4k_ss4k xfs/016 Cannot run this test using log MKFS_OPTIONS specified

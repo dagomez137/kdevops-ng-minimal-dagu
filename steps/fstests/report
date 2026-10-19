@@ -249,7 +249,7 @@ def reproduce(run, sections, failing):
     ]
     params = [
         f"{key}={run[key]}"
-        for key in ("kernel_url", "kernel_ref", "qemu_url", "qemu_ref")
+        for key in ("kernel_url", "kernel_ref", "qemu_url", "qemu_ref", "cpus", "ram")
         if run.get(key)
     ]
     by_section = {}

@@ -2,7 +2,7 @@
 # xunit reports of CI run 39111724933 (auto, kernel v7.2.11). Each reason
 # is the section's geometry, a device the guest lacks (zoned, external log
 # or rt, DAX), a feature XFS or this kernel does not have, or a test bug
-# (xfs/653); none is the guest's setup. steps/fstests/collect fails a
+# (xfs/653); none is the guest's setup. steps/fstests/report fails a
 # section that skips a test not listed here for it.
 xfs_bs4k_ss4k generic/018 Could not adequately fragment file
 xfs_bs4k_ss4k generic/205 Failed to format with small blocksize.

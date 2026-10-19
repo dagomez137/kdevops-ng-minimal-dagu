@@ -136,7 +136,7 @@ steps:
     outputs:
       - name: guests
         type: json
-      - name: reports
+      - name: shares
 
   # One run of the guest DAG below per guest, side by side; a failed guest
   # does not stop the others, and judge fails the run.
@@ -169,11 +169,13 @@ steps:
       items: ${steps.plan.outputs.guests}
     continue_on: failed
 
+  # One summary per section, whichever guests ran its tests.
   - id: report
     depends: guests
     run: >-
       nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/report --files "${steps.plan.outputs.reports}"
+      --command steps/fstests/report --shares "${steps.plan.outputs.shares}"
+      --sections "${params.sections}" --notrun "${params.notrun}"
       --output "$STATE/report.md"
 
   - id: judge
@@ -301,7 +303,6 @@ steps:
     outputs:
       - name: share
       - name: sections
-      - name: reports
 
   # One section at a time, each a run of the section DAG below; a failed
   # section does not stop the next.
@@ -324,13 +325,6 @@ steps:
       items: ${steps.configure.outputs.sections}
       max_concurrent: 1
     continue_on: failed
-
-  - id: report
-    depends: sections
-    run: >-
-      nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/report --files "${steps.configure.outputs.reports}"
-      --output "$VM_STATE/xfstests/report.md"
 
 # Stop the guest, keep its console for a crash or hang.
 handler_on:
@@ -392,15 +386,20 @@ steps:
       limit: 3
     continue_on: failed
 
-  - id: collect
+  - id: report
     depends: attempt
     run: >-
       nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/collect --section ${params.section}
-      --share ${params.share} --kver ${params.kver} --notrun "${params.notrun}"
-      --output "$DAGU_OUTPUT_FILE"
-    outputs:
-      - name: verdict
+      --command steps/fstests/report --shares ${params.share}
+      --sections ${params.section} --notrun "${params.notrun}"
+      --output "${params.share}/${params.kver}/results/${params.section}/report.md"
+
+  - id: judge
+    depends: report
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/judge
+      --report "${params.share}/${params.kver}/results/${params.section}/report.md"
 
 ---
 name: attempt

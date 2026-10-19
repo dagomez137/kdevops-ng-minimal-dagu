@@ -146,18 +146,65 @@ jobs:
           nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
           --command dagu --config config.yaml status fstests
 
-      # The job page shows this without a token; the logs and the artifacts
-      # need one.
-      - name: Publish the report
-        if: always()
-        run: cat ~/.local/state/kdevops-ng-minimal-dagu/report.md >>"$GITHUB_STEP_SUMMARY"
-
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: fstests-${{ strategy.job-index }}-${{ matrix.section }}
+          name: fstests-${{ matrix.groups || 'smoke' }}-${{ strategy.job-index }}-${{ matrix.section }}
           path: |
             ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
             ~/.local/state/kdevops-ng-minimal-dagu/report.md
             ~/.local/state/qemu-system/fstests-*/xfstests
           if-no-files-found: ignore
+
+  # One report for the workflow: each section's tests merged from every
+  # guest of every job that ran them, smoke apart from auto.
+  report:
+    needs: fstests
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: prebuilt
+          path: ${{ runner.temp }}/prebuilt
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: fstests-*
+          path: ${{ runner.temp }}/fstests
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            trusted-users = root runner
+            extra-substituters = file://${{ runner.temp }}/prebuilt/cache?trusted=true
+
+      # The job page shows the summary without a token; the logs and the
+      # artifacts need one.
+      - name: Write the report
+        run: |
+          report() {
+            nix develop --ignore-env --keep-env-var HOME --command steps/fstests/report \
+              --shares "$(echo "$RUNNER_TEMP"/fstests/fstests-"$1"-*/qemu-system/fstests-*/xfstests)" \
+              --sections "$2" --notrun guest/xfs.notrun --output "$RUNNER_TEMP/$1.md"
+            { echo "## $1"; cat "$RUNNER_TEMP/$1.md"; } >>"$GITHUB_STEP_SUMMARY"
+          }
+          report auto "xfs_bs4k_ss4k xfs_full_bs4k_ss4k xfs_full_bs16k_ss16k"
+          report smoke xfs_bs4k_ss4k
+
+      - name: Judge the run
+        run: |
+          for kind in auto smoke; do
+            nix develop --ignore-env --keep-env-var HOME --command steps/fstests/judge \
+              --report "$RUNNER_TEMP/$kind.md"
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report
+          path: |
+            ${{ runner.temp }}/auto.md
+            ${{ runner.temp }}/smoke.md

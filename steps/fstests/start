@@ -6,7 +6,7 @@
 ## Run fstests' section NAME in the guest VM: start xfstests@NAME.service
 ## and return when check has finished. The unit is a oneshot, so systemctl
 ## start waits for it; check's verdict is the report under
-## DIR/RELEASE/results/NAME, read by steps/fstests/collect. A fresh run (no
+## DIR/RELEASE/results/NAME, read by steps/fstests/report. A fresh run (no
 ## DIR/NAME.exclude) starts from no report at all; a resumed one keeps the
 ## testcases earlier attempts appended to testcases.xml there
 ## (XUNIT_TESTCASES). Write how the wait ended to outcome there and append

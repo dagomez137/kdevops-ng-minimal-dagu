@@ -55,7 +55,7 @@ and a `systemd --user` manager; the root step of
 `.github/workflows/fstests.yaml` sets them up on a fresh Ubuntu 24.04
 runner and is the list of what a host's owner does by hand. Run logs, the
 kernel, QEMU and the closure GC roots go under
-`~/.local/state/kdevops-ng-minimal-dagu`, the joined `report.md` included;
+`~/.local/state/kdevops-ng-minimal-dagu`, the run's `report.md` included;
 each guest's state (NVMe drives, the fstests share with the results) under
 `~/.local/state/qemu-system/fstests-<n>`; its units under
 `~/.config/systemd`.
@@ -81,17 +81,16 @@ takes every input as a long option, prints each command it runs
 | `steps/nix/export` | `.#default` | a binary cache, QEMU and `build.env` in a directory another host imports |
 | `steps/nix/import` | `.#default` | the exported store paths realised, QEMU and `build.env` in place |
 | `steps/ssh/key` | `.#default` | `key`: the private key that reaches the guest |
-| `steps/fstests/plan` | `.#default` | `guests`, `reports`: each guest's name and shard, and where its report goes |
+| `steps/fstests/plan` | `.#default` | `guests`, `shares`: each guest's name and shard, and its xfstests share |
 | `steps/qsu/render` | `.#default` | `cid`; the `qemu-system@fstests-<n>.service` units |
 | `steps/qsu/boot` | `.#default` | the guest up and answering over SSH |
 | `steps/fstests/shard` | `.#default` | `groups`, `tests`: with a shard I/N, the tests in N shards of equal time |
 | `steps/fstests/discover` | `.#default` | `kver`, `devices`, `sector`; fails on a test the guest lacks |
-| `steps/fstests/render` | `.#default` | `share`, `sections`, `reports`: each with its config and env on the share, its earlier results gone |
+| `steps/fstests/render` | `.#default` | `share`, `sections`: each with its config and env on the share, its earlier results gone |
 | `steps/fstests/wipe` | `.#default` | the disks emptied, per section |
 | `steps/fstests/prepare` | `.#default` | the mount points, per section |
 | `steps/fstests/start` | `.#default` | `outcome`: `xfstests@<section>.service` run to its end, stopped at the deadline, or the guest died and the section's exclude list is written |
-| `steps/fstests/collect` | `.#default` | `verdict`: from the last outcome, the section's xunit report and the tests the guest died in |
-| `steps/fstests/report` | `.#default` | `report.md`: a guest's sections on its share, every guest's in the state directory |
+| `steps/fstests/report` | `.#default` | `report.md`: one summary per section, merged from every guest that ran it; per section on its share, per run in the state directory, per workflow in CI's report job |
 | `steps/fstests/judge` | `.#default` | fails unless every section passed |
 | `steps/qsu/console` | `.#default` | `console.log` on the share, the VM's console from the journal |
 

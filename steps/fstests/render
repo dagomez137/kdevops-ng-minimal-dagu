@@ -20,9 +20,9 @@
 ## xunit report and, for N above 1, runs the list N times (-I, or -i when
 ## not stopping on failure); -L reruns a failed test N more times. The
 ## results an earlier run left under DIR/RELEASE/results for the sections
-## that will run, their exclude lists and the earlier DIR/report.md are
-## removed. Append share=DIR, sections=<the ones to run> and reports=<the
-## summary steps/fstests/collect writes for each> to FILE. kdevops-ng's
+## that will run and every earlier section's files on DIR are removed, and
+## RELEASE goes into DIR/kver, where steps/fstests/report finds the results.
+## Append share=DIR and sections=<the ones to run> to FILE. kdevops-ng's
 ## f/fstests/render_config.py:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
@@ -91,8 +91,9 @@ timeouts=$(awk --assign limit="$test_timeout" '!/^#/ && $2 * 3 > limit {
 read -r -a devs <<<"$devices"
 set -o xtrace
 mkdir --parents "$share"
-rm --force "$share/report.md"
-run=() reports=()
+rm --force "$share"/*.config "$share"/*.env "$share"/*.exclude
+echo "$kver" >"$share/kver"
+run=()
 for section in $sections; do
 	block=$(awk --assign want="[$section]" '/^\[/ { on = ($0 == want) } on' "$catalog")
 	mkfs=$(sed --quiet 's/^MKFS_OPTIONS=//p' <<<"$block")
@@ -140,7 +141,6 @@ for section in $sections; do
 	echo "wrote $share/$section.config $share/$section.env"
 	rm --recursive --force "${share:?}/${kver:?}/results/${section:?}" "$share/$section.exclude"
 	run+=("$section")
-	reports+=("$share/$kver/results/$section/report.md")
 done
 if [ "${#run[@]}" -eq 0 ]; then
 	echo "every section was skipped" >&2
@@ -149,5 +149,4 @@ fi
 {
 	echo "share=$share"
 	echo "sections=${run[*]}"
-	echo "reports=${reports[*]}"
 } >>"$output"

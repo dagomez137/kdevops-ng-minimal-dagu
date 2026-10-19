@@ -4,10 +4,11 @@
 ##
 ## Split this host's share of a run among V guests: guest J (named
 ## fstests-J) takes shard (I-1)*V+J of N*V, J of V when the shard is empty,
-## or the whole run for one guest and no shard, and leaves its report in
-## DIR/fstests-J/xfstests/report.md, which goes first so that a guest that
-## fails early leaves none. Append guests=<a JSON list of {vm, shard}> and
-## reports=<those report paths> to FILE:
+## or the whole run for one guest and no shard, and leaves its results on
+## its xfstests share DIR/fstests-J/xfstests. The share's kver file goes
+## first, so that a guest that fails before steps/fstests/render writes it
+## again leaves none for steps/fstests/report to read. Append guests=<a
+## JSON list of {vm, shard}> and shares=<those shares> to FILE:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/fstests/plan --vms 2 --shard 1/6 \
@@ -44,11 +45,11 @@ guests=$(jq --null-input --compact-output --argjson vms "$vms" --argjson index "
 	shard: (if $shard == "" and $vms == 1 then ""
 		else "\(($index - 1) * $vms + .)/\($count * $vms)" end)
 }]')
-reports=$(jq --raw-output --arg state "$state" \
-	'[.[] | "\($state)/\(.vm)/xfstests/report.md"] | join(" ")' <<<"$guests")
-read -r -a stale <<<"$reports"
-rm --force "${stale[@]}"
+shares=$(jq --raw-output --arg state "$state" \
+	'[.[] | "\($state)/\(.vm)/xfstests"] | join(" ")' <<<"$guests")
+read -r -a list <<<"$shares"
+rm --force "${list[@]/%//kver}"
 {
 	echo "guests=$guests"
-	echo "reports=$reports"
+	echo "shares=$shares"
 } >>"$output"

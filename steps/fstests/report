@@ -1,33 +1,137 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: copyleft-next-0.3.1
-## Usage: steps/fstests/report --files PATHS --output FILE
+## Usage: steps/fstests/report --shares DIRS --sections NAMES --notrun FILE
+##            --output FILE
 ##
-## Join the summaries in PATHS, which steps/fstests/collect wrote for each
-## section or this step wrote for each guest, into FILE and print it. A
-## missing summary is a section or guest that did not get that far, and
-## FILE says it failed. kdevops-ng's f/fstests/report.py:
+## Write one summary per section NAME into FILE and print it, merging what
+## every guest's xfstests share in DIRS that steps/fstests/render configured
+## for it ran: the guests may be shards of one run on this host or on many.
+## A share's results are under the kernel release render wrote to its kver
+## file, in
+## RELEASE/results/NAME: check's xunit report, or the testcases appended to
+## testcases.xml there when check never finished, with steps/fstests/start's
+## last outcome and the tests the guest died in. A section passed when every
+## share's last outcome is finished with a report, a test ran, none failed
+## and none was skipped that the "section test reason" lines of the notrun
+## FILE do not list for NAME (any skip passes when FILE is empty or has no
+## line for NAME); a test failed when any of its passes did, and did not
+## run when every pass skipped it. A share without a kver file lost its
+## guest before render, and a failed summary of its own lists it. Each
+## summary opens with passed: or failed:, which steps/fstests/judge reads.
+## kdevops-ng's
+## f/fstests/collect.py and report.py:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/fstests/report \
-##       --files ~/.local/state/qemu-system/fstests-1/xfstests/7.2.11/results/xfs_bs4k_ss4k/report.md \
-##       --output ~/.local/state/qemu-system/fstests-1/xfstests/report.md
+##       --shares "$(echo ~/.local/state/qemu-system/fstests-*/xfstests)" \
+##       --sections xfs_bs4k_ss4k --notrun guest/xfs.notrun \
+##       --output ~/.local/state/kdevops-ng-minimal-dagu/report.md
 set -o errexit -o nounset -o pipefail
 
 while [ $# -gt 0 ]; do
 	case $1 in
-	--files | --output) declare "${1#--}=$2" ;;
+	--shares | --sections | --notrun | --output) declare "${1#--}=$2" ;;
 	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
 	esac
 	shift 2
 done
-: "${files:?} ${output:?}"
+: "${shares:?} ${sections:?} ${notrun?} ${output:?}"
 
+read -r -a dirs <<<"$shares"
 set -o xtrace
-for file in $files; do
-	if [ -s "$file" ]; then
-		cat "$file"
-	else
-		printf '### `%s`\n```\nfailed: never written\n```\n' "$file"
+lost=()
+for share in "${dirs[@]}"; do
+	[ -s "$share/kver" ] || lost+=("$share")
+done
+{
+	if [ "${#lost[@]}" -gt 0 ]; then
+		echo '### fstests guests'
+		echo '```'
+		echo "failed: ${#lost[@]} of ${#dirs[@]} guests never got to run a section"
+		printf '  %s\n' "${lost[@]}"
+		echo '```'
 	fi
-done >"$output"
+	for section in $sections; do
+		files=() problems='' crashes='' guests=0
+		for share in "${dirs[@]}"; do
+			if [ ! -s "$share/kver" ] || [ ! -e "$share/$section.config" ]; then
+				continue
+			fi
+			guests=$((guests + 1))
+			dir=$share/$(<"$share/kver")/results/$section
+			outcome=$(cat "$dir/outcome" 2>/dev/null) || outcome='never started'
+			if [ -s "$dir/result.xml" ]; then
+				files+=("$dir/result.xml")
+			elif [ -s "$dir/testcases.xml" ]; then
+				files+=("$dir/testcases.xml")
+			fi
+			if [ "$outcome" != finished ]; then
+				problems+=$'\n'"  $share: ${outcome//_/ }"
+			elif [ ! -s "$dir/result.xml" ]; then
+				problems+=$'\n'"  $share: check did not finish"
+			fi
+			if [ -s "$dir/crashes" ]; then
+				crashes+=$'\n'$(sed 's/^/  /' "$dir/crashes")
+			fi
+		done
+		# check writes one <testcase> line per test and pass (common/report), its
+		# <failure> or <skipped> on the lines after it.
+		summary=$(awk --assign section="$section" --assign notrun="$notrun" \
+			--assign guests="$guests" --assign problems="$problems" '
+		BEGIN {
+			while (notrun != "" && (getline line <notrun) > 0)
+				if (split(line, f, " ") > 1 && f[1] == section) listed = expected[f[2]] = 1
+		}
+		/<testcase / && match($0, / name="[^"]*"/) {
+			name = substr($0, RSTART + 7, RLENGTH - 8)
+			if (!(name in passes)) order[++n] = name
+			passes[name]++
+		}
+		/<failure/ { failed[name] = 1 }
+		/<skipped/ && match($0, /message="[^"]*"/) {
+			skipped[name]++
+			reason[name] = substr($0, RSTART + 9, RLENGTH - 10)
+		}
+		END {
+			for (i = 1; i <= n; i++) {
+				t = order[i]
+				if (t in failed) { nfail++; fails = fails " " t }
+				else if (skipped[t] == passes[t]) {
+					nskip++
+					if (listed && !(t in expected))
+						unexpected = unexpected sprintf("\n  %s: %s", t, reason[t])
+				} else {
+					npass++
+					if (t in expected) ran = ran " " t
+				}
+			}
+			printf "%s: %d tests on %d guest%s, %d passed, %d failed, %d not run%s\n",
+				nfail || !npass || unexpected != "" || problems != "" ? "failed" : "passed",
+				n, guests, guests == 1 ? "" : "s", npass, nfail, nskip, npass || nfail ? "" : ", none ran"
+			if (nfail) print "Failures:" fails
+			if (unexpected != "") print "Not run, not expected to skip:" unexpected
+			if (ran != "") print "Ran, expected to skip:" ran
+			if (problems != "") print "Guests that did not finish:" problems
+		}' "${files[@]:-/dev/null}")
+		if [ -n "$crashes" ]; then
+			summary+=$'\n'"The guest died in:$crashes"
+		fi
+		# Each test at its slowest pass.
+		slowest=$(awk '
+		/<testcase / && match($0, / name="[^"]*"/) {
+			name = substr($0, RSTART + 7, RLENGTH - 8)
+			match($0, /time="[^"]*"/); time = substr($0, RSTART + 6, RLENGTH - 7) + 0
+			if (!(name in slow) || time > slow[name]) slow[name] = time
+		}
+		END { for (name in slow) print slow[name], name }' "${files[@]:-/dev/null}" |
+			sort --numeric-sort --reverse | sed --quiet 1,10p)
+		if [ -n "$slowest" ]; then
+			summary+=$'\n'"Slowest:"$'\n'"$slowest"
+		fi
+		echo "### fstests \`$section\`"
+		echo '```'
+		echo "$summary"
+		echo '```'
+	done
+} >"$output"
 cat "$output"

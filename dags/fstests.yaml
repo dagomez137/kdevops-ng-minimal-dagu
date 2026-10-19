@@ -50,7 +50,7 @@ params:
   - name: make_flags
     default: ""
   - name: ccache
-    default: "true"
+    default: "false"
   - name: config_method
     default: preset
   - name: config

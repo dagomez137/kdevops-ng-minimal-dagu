@@ -148,6 +148,22 @@ the workflow builds once and runs each section in 6 shards, 18 jobs plus
 smoke, under the 20 a Free account runs at a time; two guests per runner
 bring a shard from about 60 to about 40 min.
 
+**The workflow still decides.** CI must run only what a developer runs
+locally, and `.github/workflows/fstests.yaml` still computes: the list of
+runs (`seq | jq`), the section and shard matrix, the smoke test list, the
+default kernel_ref, the report job (kernel_ref read from the shares, the
+baseline release probed with `curl`, one report per kind, the fenced
+summary, judge per kind) and the baseline release (`gh release`). Dagu and
+Actions both orchestrate; Dagu should own all of it, and GitHub only lend
+runners. A possible plan: a `plan` DAG writes the job matrix to a file the
+workflow reads with `fromJSON`, each job runs `dagu start fstests` with
+the entry's parameters passed through unchanged, a `report` DAG merges the
+downloaded shares, resolves the baseline, writes the report and judges,
+and a `publish` DAG makes the release; a local `dagu start ci` runs the
+same entries on one host through `dag.run`. Dagu's coordinator and
+workers would remove the matrix too, but need a coordinator the runners
+reach.
+
 **Logs need a token.** Anonymous API calls can read job and step status but
 get 403 for step logs and artifacts, even on a public repository; the job
 summary is the one place results are readable without signing in.

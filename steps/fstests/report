@@ -430,7 +430,10 @@ def main():
     facts = [
         (
             "kernel",
-            f"{run.get('kernel_url', '?')} {kernel_ref} {run.get('kernel_commit', '')}",
+            f"{run.get('kernel_url', '?')} {kernel_ref} {run.get('kernel_commit', '')}"
+            + (
+                " with uncommitted changes" if run.get("kernel_dirty") == "true" else ""
+            ),
         ),
         ("build", run.get("kernel", "")),
         ("fstests", f"{run.get('fstests', '?')}, {run.get('xfsprogs', '?')}"),

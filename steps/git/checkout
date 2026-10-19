@@ -2,15 +2,17 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 ## Usage: steps/git/checkout --url URL --ref REF --repo REPO --dir DIR --output FILE
 ##
-## Check REF out at DIR, detached, and append commit=<the commit> and
-## name=<REF when it is a tag, else what git describe calls the commit> to
+## Check REF out at DIR, detached, and append commit=<the commit>,
+## dirty=<true when DIR has changes to tracked files> and name=<REF when it
+## is a tag, else what git describe calls the commit, -dirty when dirty> to
 ## FILE.
 ## Given REPO (a clone, bare or not, or one of its worktrees), DIR is a
 ## worktree of it and REF is what REPO calls it, fetched from URL only when
 ## REPO lacks it, so nothing but what REPO lacks is downloaded and REPO's
 ## refs are left alone. With REPO empty, DIR is a one-commit clone of URL.
-## A DIR already there moves to the commit; one with changes to tracked
-## files is refused, never discarded:
+## A DIR already there moves to the commit. One with changes to tracked
+## files stays as it is when it is at the commit, so a build takes those
+## changes, and is refused otherwise, never discarded:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/git/checkout \
@@ -29,9 +31,9 @@ done
 : "${url:?} ${ref:?} ${repo?} ${dir:?} ${output:?}"
 
 set -o xtrace
+dirty=false
 if [ -e "$dir" ] && [ -n "$(git -C "$dir" status --porcelain --untracked-files=no)" ]; then
-	echo "$dir has changes to tracked files; commit them or move them away" >&2
-	exit 1
+	dirty=true
 fi
 # What REF named: a tag names the commit after itself, wherever the tree
 # came from, so the same tag gets the same name on every host.
@@ -46,31 +48,40 @@ if [ -n "$repo" ]; then
 			named=FETCH_HEAD
 		fi
 	fi
-	if [ -e "$dir" ]; then
-		git -C "$dir" checkout --detach "$commit"
-	else
-		mkdir --parents "$(dirname "$dir")"
-		git -C "$repo" worktree add --detach "$dir" "$commit"
+elif [ -e "$dir" ]; then
+	git -C "$dir" fetch --depth 1 "$url" "$ref"
+	commit=$(git -C "$dir" rev-parse --verify "FETCH_HEAD^{commit}")
+	if [ "$(git -C "$dir" cat-file -t FETCH_HEAD)" = tag ]; then
+		named=FETCH_HEAD
 	fi
 else
-	if [ -e "$dir" ]; then
-		git -C "$dir" fetch --depth 1 "$url" "$ref"
-		if [ "$(git -C "$dir" cat-file -t FETCH_HEAD)" = tag ]; then
-			named=FETCH_HEAD
-		fi
-		git -C "$dir" checkout --detach FETCH_HEAD
-	else
-		git clone --depth 1 --branch "$ref" "$url" "$dir"
-		named=$(git -C "$dir" rev-parse --verify --quiet "refs/tags/$ref") || true
-	fi
+	git clone --depth 1 --branch "$ref" "$url" "$dir"
 	commit=$(git -C "$dir" rev-parse HEAD)
+	named=$(git -C "$dir" rev-parse --verify --quiet "refs/tags/$ref") || true
 fi
+
+if [ ! -e "$dir" ]; then
+	mkdir --parents "$(dirname "$dir")"
+	git -C "$repo" worktree add --detach "$dir" "$commit"
+elif [ "$(git -C "$dir" rev-parse HEAD)" != "$commit" ]; then
+	if [ "$dirty" = true ]; then
+		echo "$dir has changes to tracked files and is not at $ref;" \
+			"commit them, move them away or check $ref out there" >&2
+		exit 1
+	fi
+	git -C "$dir" checkout --detach "$commit"
+fi
+
 if [ -n "$named" ]; then
 	name=$ref
 else
 	name=$(git -C "$dir" describe --tags --always "$commit")
 fi
+if [ "$dirty" = true ]; then
+	name=$name-dirty
+fi
 {
 	echo "commit=$commit"
+	echo "dirty=$dirty"
 	echo "name=$name"
 } >>"$output"

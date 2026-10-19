@@ -50,6 +50,7 @@ steps:
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: commit
+      - name: name
 
   - id: kernel
     depends: kernel_src
@@ -71,6 +72,7 @@ steps:
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: commit
+      - name: name
 
   - id: qemu
     depends: qemu_src
@@ -102,7 +104,7 @@ steps:
     run: >-
       printf '%s\n' kernel=${steps.kernel.outputs.kernel} qemu=${steps.qemu.outputs.qemu}
       kernel_url=${params.kernel_url} kernel_ref=${params.kernel_ref}
-      kernel_commit=${steps.kernel_src.outputs.commit}
+      kernel_commit=${steps.kernel_src.outputs.commit} kernel_name=${steps.kernel_src.outputs.name}
       qemu_url=${params.qemu_url} qemu_ref=${params.qemu_ref}
       init=${steps.closure.outputs.init} initrd=${steps.closure.outputs.initrd}
       "virtiofsd=$(readlink --canonicalize "$STATE/virtiofsd")/bin/virtiofsd"

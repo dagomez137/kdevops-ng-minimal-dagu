@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 ## Usage: steps/git/checkout --url URL --ref REF --repo REPO --dir DIR --output FILE
 ##
-## Check REF out at DIR, detached, and append commit=<the commit> to FILE.
+## Check REF out at DIR, detached, and append commit=<the commit> and
+## name=<REF when it is a tag, else what git describe calls the commit> to
+## FILE.
 ## Given REPO (a clone, bare or not, or one of its worktrees), DIR is a
 ## worktree of it and REF is what REPO calls it, fetched from URL only when
 ## REPO lacks it, so nothing but what REPO lacks is downloaded and REPO's
@@ -31,10 +33,18 @@ if [ -e "$dir" ] && [ -n "$(git -C "$dir" status --porcelain --untracked-files=n
 	echo "$dir has changes to tracked files; commit them or move them away" >&2
 	exit 1
 fi
+# What REF named: a tag names the commit after itself, wherever the tree
+# came from, so the same tag gets the same name on every host.
+named=
 if [ -n "$repo" ]; then
-	if ! commit=$(git -C "$repo" rev-parse --verify --quiet "$ref^{commit}"); then
+	if commit=$(git -C "$repo" rev-parse --verify --quiet "$ref^{commit}"); then
+		named=$(git -C "$repo" rev-parse --verify --quiet "refs/tags/$ref") || true
+	else
 		git -C "$repo" fetch --no-tags "$url" "$ref"
 		commit=$(git -C "$repo" rev-parse --verify "FETCH_HEAD^{commit}")
+		if [ "$(git -C "$repo" cat-file -t FETCH_HEAD)" = tag ]; then
+			named=FETCH_HEAD
+		fi
 	fi
 	if [ -e "$dir" ]; then
 		git -C "$dir" checkout --detach "$commit"
@@ -45,10 +55,22 @@ if [ -n "$repo" ]; then
 else
 	if [ -e "$dir" ]; then
 		git -C "$dir" fetch --depth 1 "$url" "$ref"
+		if [ "$(git -C "$dir" cat-file -t FETCH_HEAD)" = tag ]; then
+			named=FETCH_HEAD
+		fi
 		git -C "$dir" checkout --detach FETCH_HEAD
 	else
 		git clone --depth 1 --branch "$ref" "$url" "$dir"
+		named=$(git -C "$dir" rev-parse --verify --quiet "refs/tags/$ref") || true
 	fi
 	commit=$(git -C "$dir" rev-parse HEAD)
 fi
-echo "commit=$commit" >>"$output"
+if [ -n "$named" ]; then
+	name=$ref
+else
+	name=$(git -C "$dir" describe --tags --always "$commit")
+fi
+{
+	echo "commit=$commit"
+	echo "name=$name"
+} >>"$output"

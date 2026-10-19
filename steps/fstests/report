@@ -348,7 +348,9 @@ def main():
         )
 
     fstyp = props.get("FSTYP", "fstests")
-    kernel_ref = run.get("kernel_ref", props.get("KERNEL", "unknown kernel"))
+    kernel_ref = run.get(
+        "kernel_name", run.get("kernel_ref", props.get("KERNEL", "unknown kernel"))
+    )
     subject = f"[fstests] {kernel_ref} {fstyp}: "
     subject += "incomplete, " if incomplete else ""
     subject += plural(len(failing), "failing test")
@@ -498,7 +500,10 @@ def main():
     lines += [
         "",
         wrap(
-            "The results land in"
+            "dagu prints only its own log. Each run writes a report like this"
+            " one to ~/.local/state/kdevops-ng-minimal-dagu/reports/<kernel>/"
+            "fstests/<sections>, the kernel by its tag or git describe, and the"
+            " results to"
             " ~/.local/state/qemu-system/fstests-1/xfstests/<release>/results;"
             " vms=N splits the tests among N guests."
         ),
@@ -519,6 +524,8 @@ def main():
         + "".join(f"{line}\n" for line in sorted(skips))
     )
     sys.stdout.write(text)
+    for name in ("report.txt", "outcomes", "notrun"):
+        print(f"wrote {(output / name).resolve()}")
 
 
 if __name__ == "__main__":

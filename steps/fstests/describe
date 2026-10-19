@@ -37,7 +37,7 @@ fi
 for share in "${dirs[@]}"; do
 	mkdir --parents "$share"
 	{
-		grep --extended-regexp '^(kernel|kernel_url|kernel_ref|kernel_commit|qemu_url|qemu_ref)=' "$build"
+		grep --extended-regexp '^(kernel|kernel_url|kernel_ref|kernel_commit|kernel_name|qemu_url|qemu_ref)=' "$build"
 		grep --only-matching --max-count=1 'xfstests-[0-9][^/-]*$' <<<"$closure" |
 			sed 's/^/fstests=/'
 		grep --only-matching --max-count=1 'xfsprogs-[0-9][^/-]*$' <<<"$closure" |

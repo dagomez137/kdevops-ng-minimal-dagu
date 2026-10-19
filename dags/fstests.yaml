@@ -122,10 +122,11 @@ steps:
   - id: inputs
     depends: [build, import]
     run: >-
-      grep --extended-regexp '^(kernel|qemu|init|initrd|virtiofsd)=' "$STATE/build.env"
-      >>"$DAGU_OUTPUT_FILE"
+      grep --extended-regexp '^(kernel|kernel_name|qemu|init|initrd|virtiofsd)='
+      "$STATE/build.env" >>"$DAGU_OUTPUT_FILE"
     outputs:
       - name: kernel
+      - name: kernel_name
       - name: qemu
       - name: init
       - name: initrd
@@ -198,20 +199,23 @@ steps:
       items: ${steps.plan.outputs.guests}
     continue_on: failed
 
-  # One report of every section, whichever guests ran its tests.
-  - id: report
-    depends: guests
-    run: >-
-      nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/report --shares "${steps.plan.outputs.shares}"
-      --sections "${params.sections}" --notrun "${params.notrun}"
-      --baseline "${params.baseline}" --output "$STATE/report"
-
-  - id: judge
-    depends: report
-    run: >-
-      nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/judge --outcomes "$STATE/report/outcomes"
+  # One report per section, whichever guests ran its tests, under what ran:
+  # the kernel (its tag, else git describe), the suite and the section. The
+  # same run again replaces it.
+  - id: reports
+    depends: [guests, root]
+    action: dag.run
+    with:
+      dag: report
+      params:
+        root: ${steps.root.outputs.root}
+        section: ${ITEM}
+        shares: ${steps.plan.outputs.shares}
+        notrun: ${params.notrun}
+        baseline: ${params.baseline}
+        dir: $STATE/reports/${steps.inputs.outputs.kernel_name}/fstests/${ITEM}
+    parallel:
+      items: ${params.sections}
 
 # Show what the host looks like after the run.
 handler_on:
@@ -219,6 +223,41 @@ handler_on:
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/host/check --output /dev/stdout
+
+---
+name: report
+description: >-
+  Write one section's report from every guest's share and fail when the
+  section did not run to the end.
+working_dir: ${params.root}
+
+params:
+  - name: root
+    description: the checkout the steps run from
+  - name: section
+    description: the guest/xfs.config section to report
+  - name: shares
+    description: the xfstests shares of every guest
+  - name: notrun
+    description: the skips each section expects, empty for any
+  - name: baseline
+    description: the outcomes, or their URL, to set the section against
+  - name: dir
+    description: where the report goes
+
+steps:
+  - id: report
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/report --shares "${params.shares}"
+      --sections ${params.section} --notrun "${params.notrun}"
+      --baseline "${params.baseline}" --output "${params.dir}"
+
+  - id: judge
+    depends: report
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/judge --outcomes "${params.dir}/outcomes"
 
 ---
 name: guest

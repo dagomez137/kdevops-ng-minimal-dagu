@@ -77,7 +77,9 @@ The host needs Nix with the `nix-command` and `flakes` features,
 `.github/workflows/fstests.yaml` sets them up on a fresh Ubuntu 24.04
 runner and is the list of what a host's owner does by hand. Run logs, the
 kernel, QEMU and the closure GC roots go under
-`~/.local/state/kdevops-ng-minimal-dagu`, the run's `report` included;
+`~/.local/state/kdevops-ng-minimal-dagu`, each run's report under
+`reports/<kernel>/fstests/<sections>`, the kernel by its tag or `git
+describe`;
 each guest's state (NVMe drives, the fstests share with the results) under
 `~/.local/state/qemu-system/fstests-<n>`; its units under
 `~/.config/systemd`.

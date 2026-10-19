@@ -127,17 +127,18 @@ jobs:
             trusted-users = root runner
             extra-substituters = file://${{ runner.temp }}/prebuilt/cache?trusted=true
 
-      # Two guests of 2 CPUs and 2 GiB: in sizing run 39151571818 they ran a
+      # Two guests of 2 CPUs and 4 GiB: in sizing run 39151571818 they ran a
       # slice 1.7 times faster than one guest of 2 or 4 CPUs and 2 to 12 GiB,
       # which all took the same time; 8 guest CPUs on the 4 slowed it down
-      # and 1 CPU skips generic/650.
+      # and 1 CPU skips generic/650. The runner keeps about 7 GiB for its
+      # page cache, which holds the guests' drives.
       - name: Run the DAG
         run: >-
           nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
           --command dagu --config config.yaml start fstests --
           "prebuilt=$RUNNER_TEMP/prebuilt" "sections=${{ matrix.section }}"
           "shard=${{ matrix.shard }}" "groups=${{ matrix.groups }}" "tests=${{ matrix.tests }}"
-          vms=2 cpus=2 ram=2048
+          vms=2 cpus=2 ram=4096
 
       - name: Show the run
         if: always()

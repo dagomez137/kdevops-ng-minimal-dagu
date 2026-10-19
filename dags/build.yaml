@@ -9,7 +9,7 @@ params:
   - name: kernel_url
     default: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
   - name: kernel_ref
-    default: v7.2.11
+    default: v7.3
   - name: qemu_url
     default: https://gitlab.com/qemu-project/qemu.git
   - name: qemu_ref

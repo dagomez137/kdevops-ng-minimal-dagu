@@ -99,6 +99,20 @@
           shellHook = old.shellHook + shellHook;
         });
 
+        # kdevops-ng's build-kselftests and build-usertests, with the libraries
+        # the tests link and the static libc some of them want; the steps
+        # add their trees to the store.
+        kselftests = nixos-flake.devShells.${system}.build-kselftests.overrideAttrs (old: {
+          nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.nix ];
+          inherit (env) GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM NIX_SSL_CERT_FILE;
+          shellHook = (old.shellHook or "") + shellHook;
+        });
+        usertests = nixos-flake.devShells.${system}.build-usertests.overrideAttrs (old: {
+          nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.nix ];
+          inherit (env) GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM NIX_SSL_CERT_FILE;
+          shellHook = (old.shellHook or "") + shellHook;
+        });
+
         # QEMU's configure builds a Python venv offline, from the setuptools,
         # wheel and pip it finds.
         qemu = pkgs.mkShell {

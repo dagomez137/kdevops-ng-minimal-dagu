@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/usertests --src SRC --flags FILE --harnesses HARNESSES
+##            --dir DIR --index INDEX --output FILE
+##
+## Build the userspace test harnesses HARNESSES of the Linux tree SRC
+## (tools/testing/<harness>, which compile kernel sources such as the
+## XArray, the maple tree and the VMA code into plain programs with ASan and
+## UBSan), copy their programs to DIR/<harness>/<program>, list them in
+## DIR/MANIFEST, add DIR to the Nix store as usertests-<the tree's kernel
+## release, with the make arguments in FILE>, keep it as
+## INDEX/usertests-<identity> and append usertests=<store path> to FILE.
+## The programs test the source they were built from, not the running
+## kernel. The identity hashes the tree, HARNESSES, this script and the
+## devShell's PATH; usertests already under INDEX are not built again. Run
+## it in the usertests devShell:
+##
+##   nix develop --ignore-env --keep-env-var HOME .#usertests \
+##       --command steps/kernel/usertests \
+##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux \
+##       --flags ~/.local/state/kdevops-ng-minimal-dagu/linux.flags \
+##       --harnesses 'radix-tree vma memblock' \
+##       --dir ~/.local/state/kdevops-ng-minimal-dagu/usertests \
+##       --index ~/.local/state/kdevops-ng-minimal-dagu/index --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--src | --flags | --harnesses | --dir | --index | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${src:?} ${flags:?} ${harnesses:?} ${dir:?} ${index:?} ${output:?}"
+
+set -o xtrace
+staging=$(mktemp)
+cp "$(git -C "$src" rev-parse --path-format=absolute --git-path index)" "$staging"
+GIT_INDEX_FILE=$staging git -C "$src" add --update
+tree=$(GIT_INDEX_FILE=$staging git -C "$src" write-tree)
+rm "$staging"
+identity=$(printf '%s\n' "$tree" "$harnesses" "$(sha256sum <"$0")" "$PATH" |
+	sha256sum | cut --characters=1-16)
+if usertests=$(readlink --canonicalize-existing "$index/usertests-$identity"); then
+	echo "usertests=$usertests" >>"$output"
+	exit 0
+fi
+
+rm --recursive --force "$dir"
+mkdir --parents "$dir"
+read -r -a list <<<"$harnesses"
+for harness in "${list[@]}"; do
+	# kdevops-ng's catalog of the programs each harness builds.
+	case $harness in
+	radix-tree) programs=(main xarray maple idr-test multiorder) ;;
+	vma) programs=(vma) ;;
+	memblock) programs=(main) ;;
+	scatterlist) programs=(main) ;;
+	*)
+		echo "no harness $harness" >&2
+		exit 1
+		;;
+	esac
+	make --no-print-directory --directory="$src/tools/testing/$harness" --jobs="$(nproc)"
+	mkdir --parents "$dir/$harness"
+	for program in "${programs[@]}"; do
+		cp "$src/tools/testing/$harness/$program" "$dir/$harness/"
+		echo "$harness/$program" >>"$dir/MANIFEST"
+	done
+	# The objects land in the source tree, and scatterlist has no
+	# .gitignore for them.
+	make --no-print-directory --directory="$src/tools/testing/$harness" clean
+done
+mapfile -t args <"$flags"
+release=$(make --no-print-directory --directory="$src" --silent "${args[@]}" kernelrelease)
+usertests=$(nix store add-path --name "usertests-$release" "$dir")
+nix build "$usertests" --out-link "$index/usertests-$identity"
+echo "usertests=$usertests" >>"$output"

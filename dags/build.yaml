@@ -64,6 +64,13 @@ params:
     default: ""
   - name: in_tree
     default: "false"
+  # The kernel's own test suites to build for dags/selftests.yaml and
+  # dags/usertests.yaml, none by default: kselftest collections and the
+  # userspace harnesses of tools/testing.
+  - name: selftests
+    default: ""
+  - name: usertests
+    default: ""
   # Where steps/nix/export writes; empty exports nothing.
   - name: export
     default: ""
@@ -208,8 +215,35 @@ steps:
       "virtiofsd=$(readlink --canonicalize "$STATE/virtiofsd")/bin/virtiofsd"
       >"$STATE/build.env"
 
-  - id: export
+  # Each appends its tree's store path to the manifest, after it is written.
+  - id: selftests
     depends: manifest
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME .#kselftests
+      --command steps/kernel/selftests --src "${params.group}/linux"
+      --flags "$STATE/linux.flags" --targets "${params.selftests}"
+      --dir "$STATE/selftests" --index "$STATE/index" --output "$STATE/build.env"
+    preconditions:
+      - condition: "${params.selftests}"
+        expected: "re:.+"
+    continue_on:
+      skipped: true
+
+  - id: usertests
+    depends: selftests
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME .#usertests
+      --command steps/kernel/usertests --src "${params.group}/linux"
+      --flags "$STATE/linux.flags" --harnesses "${params.usertests}"
+      --dir "$STATE/usertests" --index "$STATE/index" --output "$STATE/build.env"
+    preconditions:
+      - condition: "${params.usertests}"
+        expected: "re:.+"
+    continue_on:
+      skipped: true
+
+  - id: export
+    depends: usertests
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/nix/export --manifest "$STATE/build.env"

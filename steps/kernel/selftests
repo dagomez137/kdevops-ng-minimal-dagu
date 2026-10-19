@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/selftests --src SRC --flags FILE --targets TARGETS
+##            --dir DIR --index INDEX --output FILE
+##
+## Install the kselftest collections TARGETS of the built Linux tree SRC
+## (make kselftest-install, with the make arguments in FILE) into DIR, add
+## the tree to the Nix store, keep it as INDEX/kselftests-<identity> and
+## append selftests=<store path> to FILE. Every collection must come out:
+## upstream skips one it cannot build with only a message. The identity
+## hashes the tree, its .config, TARGETS, this script and the devShell's
+## PATH; selftests already under INDEX are not built again. Run it in the
+## kselftests devShell:
+##
+##   nix develop --ignore-env --keep-env-var HOME .#kselftests \
+##       --command steps/kernel/selftests \
+##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux \
+##       --flags ~/.local/state/kdevops-ng-minimal-dagu/linux.flags \
+##       --targets 'size breakpoints timers' \
+##       --dir ~/.local/state/kdevops-ng-minimal-dagu/selftests \
+##       --index ~/.local/state/kdevops-ng-minimal-dagu/index --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--src | --flags | --targets | --dir | --index | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${src:?} ${flags:?} ${targets:?} ${dir:?} ${index:?} ${output:?}"
+
+set -o xtrace
+staging=$(mktemp)
+cp "$(git -C "$src" rev-parse --path-format=absolute --git-path index)" "$staging"
+GIT_INDEX_FILE=$staging git -C "$src" add --update
+tree=$(GIT_INDEX_FILE=$staging git -C "$src" write-tree)
+rm "$staging"
+identity=$(printf '%s\n' "$tree" "$(sha256sum <"$src/.config")" "$targets" \
+	"$(sha256sum <"$0")" "$PATH" | sha256sum | cut --characters=1-16)
+if selftests=$(readlink --canonicalize-existing "$index/kselftests-$identity"); then
+	echo "selftests=$selftests" >>"$output"
+	exit 0
+fi
+
+mapfile -t args <"$flags"
+read -r -a collections <<<"$targets"
+rm --recursive --force "$dir"
+make --no-print-directory --directory="$src" --jobs="$(nproc)" "${args[@]}" \
+	kselftest-install KSFT_INSTALL_PATH="$dir" TARGETS="$targets" FORCE_TARGETS=1
+test -x "$dir/run_kselftest.sh"
+test -s "$dir/kselftest-list.txt"
+for collection in "${collections[@]}"; do
+	test -d "$dir/$collection"
+done
+release=$(make --no-print-directory --directory="$src" --silent "${args[@]}" kernelrelease)
+selftests=$(nix store add-path --name "kselftests-$release" "$dir")
+nix build "$selftests" --out-link "$index/kselftests-$identity"
+echo "selftests=$selftests" >>"$output"

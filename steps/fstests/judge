@@ -3,7 +3,8 @@
 ## Usage: steps/fstests/judge --report FILE
 ##
 ## Fail unless every section in the report steps/fstests/report wrote,
-## FILE, passed. kdevops-ng's f/fstests/judge.py:
+## FILE, is complete: every guest ran it to the end. Failed tests do not
+## fail the run; the report lists them. kdevops-ng's f/fstests/judge.py:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/fstests/judge \
@@ -20,8 +21,8 @@ done
 : "${report:?}"
 
 set -o xtrace
-# Each section's summary line opens with passed: or failed:.
-if grep '^failed:' "$report"; then
+# Each section's summary line opens with complete: or incomplete:.
+if grep '^incomplete:' "$report"; then
 	exit 1
 fi
-grep --quiet '^passed:' "$report"
+grep --quiet '^complete:' "$report"

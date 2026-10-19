@@ -139,7 +139,8 @@ steps:
       - name: shares
 
   # One run of the guest DAG below per guest, side by side; a failed guest
-  # does not stop the others, and judge fails the run.
+  # does not stop the others, and judge fails the run when one did not
+  # finish.
   - id: guests
     depends: [inputs, key, plan, root]
     action: dag.run

@@ -91,7 +91,7 @@ takes every input as a long option, prints each command it runs
 | `steps/fstests/prepare` | `.#default` | the mount points, per section |
 | `steps/fstests/start` | `.#default` | `outcome`: `xfstests@<section>.service` run to its end, stopped at the deadline, or the guest died and the section's exclude list is written |
 | `steps/fstests/report` | `.#default` | `report.md`: one summary per section, merged from every guest that ran it; per section on its share, per run in the state directory, per workflow in CI's report job |
-| `steps/fstests/judge` | `.#default` | fails unless every section passed |
+| `steps/fstests/judge` | `.#default` | fails unless every guest ran every section to the end |
 | `steps/qsu/console` | `.#default` | `console.log` on the share, the VM's console from the journal |
 
 `steps/qsu/ssh` is the one SSH command line the guest steps share; it gives

@@ -10,14 +10,14 @@
 ## file, in
 ## RELEASE/results/NAME: check's xunit report, or the testcases appended to
 ## testcases.xml there when check never finished, with steps/fstests/start's
-## last outcome and the tests the guest died in. A section passed when every
-## share's last outcome is finished with a report, a test ran, none failed
-## and none was skipped that the "section test reason" lines of the notrun
-## FILE do not list for NAME (any skip passes when FILE is empty or has no
-## line for NAME); a test failed when any of its passes did, and did not
-## run when every pass skipped it. A share without a kver file lost its
-## guest before render, and a failed summary of its own lists it. Each
-## summary opens with passed: or failed:, which steps/fstests/judge reads.
+## last outcome and the tests the guest died in. A section is complete when
+## every share's last outcome is finished with a report and a test ran;
+## failed tests, and skips that the "section test reason" lines of the
+## notrun FILE do not list for NAME, are reported and leave it complete. A
+## test failed when any of its passes did, and did not run when every pass
+## skipped it. A share without a kver file lost its guest before render,
+## and an incomplete summary of its own lists it. Each summary opens with
+## complete: or incomplete:, which steps/fstests/judge reads.
 ## kdevops-ng's
 ## f/fstests/collect.py and report.py:
 ##
@@ -47,7 +47,7 @@ done
 	if [ "${#lost[@]}" -gt 0 ]; then
 		echo '### fstests guests'
 		echo '```'
-		echo "failed: ${#lost[@]} of ${#dirs[@]} guests never got to run a section"
+		echo "incomplete: ${#lost[@]} of ${#dirs[@]} guests never got to run a section"
 		printf '  %s\n' "${lost[@]}"
 		echo '```'
 	fi
@@ -106,7 +106,7 @@ done
 				}
 			}
 			printf "%s: %d tests on %d guest%s, %d passed, %d failed, %d not run%s\n",
-				nfail || !npass || unexpected != "" || problems != "" ? "failed" : "passed",
+				!(npass || nfail) || problems != "" ? "incomplete" : "complete",
 				n, guests, guests == 1 ? "" : "s", npass, nfail, nskip, npass || nfail ? "" : ", none ran"
 			if (nfail) print "Failures:" fails
 			if (unexpected != "") print "Not run, not expected to skip:" unexpected

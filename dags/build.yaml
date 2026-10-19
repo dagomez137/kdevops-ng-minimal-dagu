@@ -34,6 +34,27 @@ params:
     default: ""
   - name: fstests_repo
     default: ""
+  # How the kernel is built, as kdevops-ng's kernel build form: the
+  # compiler (clang, which is LLVM=1, or gcc), W= (KBUILD_EXTRA_WARN: 1, 2, 3,
+  # e, or several, such as 12e), extra KCFLAGS, other make arguments, and
+  # ccache (true or false). config_method preset expands the defconfig
+  # config, make runs config's make targets (defconfig kvm_guest.config),
+  # and fragments merges config's fragments of
+  # vendor/linux-config-fragments/kernel/configs (core/64bit storage/nvme).
+  - name: compiler
+    default: clang
+  - name: extra_warn
+    default: ""
+  - name: kcflags
+    default: ""
+  - name: make_flags
+    default: ""
+  - name: ccache
+    default: "true"
+  - name: config_method
+    default: preset
+  - name: config
+    default: vendor/linux-config-fragments/defconfigs/imageless_defconfig
   # Where steps/nix/export writes; empty exports nothing.
   - name: export
     default: ""
@@ -67,12 +88,31 @@ steps:
       - name: dirty
       - name: name
 
-  - id: kernel
+  - id: kernel_flags
     depends: kernel_src
     run: >-
       nix develop --ignore-env --keep-env-var HOME .#kernel
+      --command steps/kernel/flags --src "${params.group}/linux"
+      --compiler ${params.compiler} --extra-warn "${params.extra_warn}"
+      --kcflags "${params.kcflags}" --make-flags "${params.make_flags}"
+      --ccache "$(test '${params.ccache}' != true || echo "$STATE/ccache")"
+      --file "$STATE/linux.flags"
+
+  - id: kernel_config
+    depends: kernel_flags
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME .#kernel
+      --command steps/kernel/configure --src "${params.group}/linux"
+      --flags "$STATE/linux.flags" --method ${params.config_method}
+      --config "${params.config}"
+      --fragments vendor/linux-config-fragments/kernel/configs
+
+  - id: kernel
+    depends: kernel_config
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME .#kernel
       --command steps/kernel/build --src "${params.group}/linux"
-      --config kernel/imageless_defconfig --dir "$STATE/linux" --index "$STATE/index"
+      --flags "$STATE/linux.flags" --dir "$STATE/linux" --index "$STATE/index"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: kernel
@@ -140,7 +180,10 @@ steps:
       printf '%s\n' kernel=${steps.kernel.outputs.kernel} qemu=${steps.qemu.outputs.qemu}
       kernel_url=${params.kernel_url} kernel_ref=${params.kernel_ref}
       kernel_commit=${steps.kernel_src.outputs.commit} kernel_name=${steps.kernel_src.outputs.name}
-      kernel_dirty=${steps.kernel_src.outputs.dirty}
+      kernel_dirty=${steps.kernel_src.outputs.dirty} compiler=${params.compiler}
+      "extra_warn=${params.extra_warn}" "kcflags=${params.kcflags}"
+      "make_flags=${params.make_flags}" config_method=${params.config_method}
+      "config=${params.config}"
       qemu_url=${params.qemu_url} qemu_ref=${params.qemu_ref}
       init=${steps.closure.outputs.init} initrd=${steps.closure.outputs.initrd}
       "virtiofsd=$(readlink --canonicalize "$STATE/virtiofsd")/bin/virtiofsd"

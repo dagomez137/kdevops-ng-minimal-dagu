@@ -41,6 +41,7 @@ report.py:
 import argparse
 import html
 import re
+import shlex
 import subprocess
 import sys
 import textwrap
@@ -247,11 +248,10 @@ def reproduce(run, sections, failing):
         "  cd kdevops-ng-minimal-dagu",
         f"  git checkout {run.get('harness_commit', 'HEAD')}",
     ]
-    params = [
-        f"{key}={run[key]}"
-        for key in ("kernel_url", "kernel_ref", "qemu_url", "qemu_ref", "cpus", "ram")
-        if run.get(key)
-    ]
+    keys = ("kernel_url", "kernel_ref", "qemu_url", "qemu_ref")
+    keys += ("compiler", "config_method", "config", "extra_warn", "kcflags")
+    keys += ("make_flags", "cpus", "ram")
+    params = [shlex.quote(f"{key}={run[key]}") for key in keys if run.get(key)]
     by_section = {}
     for test_name, where in failing.items():
         for section, _ in where:

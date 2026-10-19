@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/flags --src SRC --compiler gcc|clang --extra-warn W
+##            --kcflags FLAGS --make-flags FLAGS --ccache DIR --file FILE
+##
+## Write to FILE, one per line, the make arguments every make of the Linux
+## tree SRC takes, so configure, build, the developer tools and the checks
+## agree: the compiler (clang is LLVM=1 with the unwrapped clang and its
+## builtin headers), W=W (KBUILD_EXTRA_WARN, such as 1 or 12e), KCFLAGS
+## after the prefix map, ccache with its cache in DIR (empty for none), the
+## build's provenance pinned for reproducible builds and then MAKE-FLAGS,
+## split on spaces. Run it in the kernel devShell:
+##
+##   nix develop --ignore-env --keep-env-var HOME .#kernel \
+##       --command steps/kernel/flags \
+##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux \
+##       --compiler gcc --extra-warn '' --kcflags '' --make-flags '' \
+##       --ccache ~/.local/state/kdevops-ng-minimal-dagu/ccache \
+##       --file ~/.local/state/kdevops-ng-minimal-dagu/linux.flags
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--src | --compiler | --extra-warn | --kcflags | --make-flags | --ccache | --file)
+		name=${1#--}
+		declare "${name//-/_}=$2"
+		;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${src:?} ${compiler:?} ${extra_warn?} ${kcflags?} ${make_flags?} ${ccache?} ${file:?}"
+
+set -o xtrace
+case $compiler in
+gcc) cc=gcc ;;
+clang) cc=$KERNEL_CLANG_CC ;;
+*)
+	echo "compiler $compiler is neither gcc nor clang" >&2
+	exit 1
+	;;
+esac
+# In the source tree, not O=: an out-of-tree build adds
+# --remap-path-scope=macro, which rustc takes once, and Rust debug info then
+# keeps the absolute build directory. The map strips the tree's parent: a
+# map of "$src/" misses the compile directory, "$src" itself, which the
+# build ID then hashes.
+parent=$(dirname "$src")
+args=(
+	KBUILD_BUILD_TIMESTAMP="@$(git -C "$src" log --max-count=1 --format=%ct)"
+	KBUILD_BUILD_USER=kdevops KBUILD_BUILD_HOST=kdevops KBUILD_BUILD_VERSION=1 LOCALVERSION=
+	KCFLAGS="-ffile-prefix-map=$parent/=${kcflags:+ $kcflags}"
+	KAFLAGS="-ffile-prefix-map=$parent/="
+	KRUSTFLAGS="--remap-path-prefix=$parent/="
+)
+if [ "$compiler" = clang ]; then
+	# nixpkgs' wrapped clang adds -nostdlibinc, which the kernel's
+	# -Werror=unused-command-line-argument rejects, and under -nostdinc the
+	# unwrapped one loses its builtin headers.
+	args+=(LLVM=1
+		CFLAGS_KERNEL="-I$KERNEL_CLANG_RESOURCE" CFLAGS_MODULE="-I$KERNEL_CLANG_RESOURCE")
+fi
+# The Makefile assigns CC, so it goes on the command line; ccache keys on
+# paths relative to the tree's parent, so every group shares the cache.
+if [ -n "$ccache" ]; then
+	args+=(CC="ccache $cc" CCACHE_DIR="$ccache" CCACHE_BASEDIR="$parent"
+		CCACHE_MAXSIZE=10G)
+else
+	args+=(CC="$cc")
+fi
+if [ -n "$extra_warn" ]; then
+	args+=(W="$extra_warn")
+fi
+read -r -a extra <<<"$make_flags"
+args+=("${extra[@]}")
+mkdir --parents "$(dirname "$file")"
+printf '%s\n' "${args[@]}" >"$file"

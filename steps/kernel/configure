@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/configure --src SRC --flags FILE --method METHOD
+##            --config CONFIG --fragments DIR
+##
+## Write the Linux tree SRC's .config with the make arguments in FILE, as
+## kdevops-ng's configure methods do. METHOD preset expands the defconfig
+## CONFIG; make runs CONFIG's make targets (defconfig kvm_guest.config, ...);
+## fragments merges CONFIG's fragments of DIR (core/64bit storage/nvme ...,
+## in that order, later ones winning) over allnoconfig. Each then builds no
+## module signing, lockdown or commit into the release, for the bytes to
+## depend on nothing but the tree and the configuration. Run it in the
+## kernel devShell:
+##
+##   nix develop --ignore-env --keep-env-var HOME .#kernel \
+##       --command steps/kernel/configure \
+##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux \
+##       --flags ~/.local/state/kdevops-ng-minimal-dagu/linux.flags --method preset \
+##       --config vendor/linux-config-fragments/defconfigs/imageless_defconfig \
+##       --fragments vendor/linux-config-fragments/kernel/configs
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--src | --flags | --method | --config | --fragments) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${src:?} ${flags:?} ${method:?} ${config:?} ${fragments:?}"
+
+set -o xtrace
+mapfile -t args <"$flags"
+make=(make --no-print-directory --directory="$src" "${args[@]}")
+read -r -a words <<<"$config"
+case $method in
+preset)
+	cp "$config" "$src/.config"
+	;;
+make)
+	"${make[@]}" "${words[@]}"
+	;;
+fragments)
+	# merge_config.sh reads the make variables, LLVM=1 among them, from its
+	# environment.
+	paths=("${words[@]/#/$(realpath "$fragments")/}")
+	(cd "$src" && env "${args[@]}" ./scripts/kconfig/merge_config.sh -n "${paths[@]/%/.config}")
+	;;
+*)
+	echo "method $method is none of preset, make or fragments" >&2
+	exit 1
+	;;
+esac
+# A signing key would be generated afresh by every build, and lockdown
+# selects module signing. A repository that lacks the tag would add
+# -g<commit> to the release.
+"$src/scripts/config" --file "$src/.config" \
+	--disable SECURITY_LOCKDOWN_LSM --disable MODULE_SIG --disable LOCALVERSION_AUTO
+"${make[@]}" olddefconfig

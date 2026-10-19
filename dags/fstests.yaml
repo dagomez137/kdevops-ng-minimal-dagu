@@ -34,6 +34,27 @@ params:
     default: ""
   - name: fstests_repo
     default: ""
+  # How the kernel is built, as kdevops-ng's kernel build form: the
+  # compiler (clang, which is LLVM=1, or gcc), W= (KBUILD_EXTRA_WARN: 1, 2, 3,
+  # e, or several, such as 12e), extra KCFLAGS, other make arguments, and
+  # ccache (true or false). config_method preset expands the defconfig
+  # config, make runs config's make targets (defconfig kvm_guest.config),
+  # and fragments merges config's fragments of
+  # vendor/linux-config-fragments/kernel/configs (core/64bit storage/nvme).
+  - name: compiler
+    default: clang
+  - name: extra_warn
+    default: ""
+  - name: kcflags
+    default: ""
+  - name: make_flags
+    default: ""
+  - name: ccache
+    default: "true"
+  - name: config_method
+    default: preset
+  - name: config
+    default: vendor/linux-config-fragments/defconfigs/imageless_defconfig
   # Sections of guest/xfs.config, run one after the other.
   - name: sections
     default: xfs_bs4k_ss4k
@@ -114,6 +135,13 @@ steps:
         fstests_url: ${params.fstests_url}
         fstests_ref: ${params.fstests_ref}
         fstests_repo: ${params.fstests_repo}
+        compiler: ${params.compiler}
+        extra_warn: ${params.extra_warn}
+        kcflags: ${params.kcflags}
+        make_flags: ${params.make_flags}
+        ccache: ${params.ccache}
+        config_method: ${params.config_method}
+        config: ${params.config}
     preconditions:
       - condition: "${params.prebuilt}"
         expected: "re:^$"

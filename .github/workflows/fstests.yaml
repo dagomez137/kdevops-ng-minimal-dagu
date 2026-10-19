@@ -195,16 +195,16 @@ jobs:
           report auto "xfs_bs4k_ss4k xfs_full_bs4k_ss4k xfs_full_bs16k_ss16k"
           report smoke xfs_bs4k_ss4k
 
-      - name: Judge the run
-        run: |
-          for kind in auto smoke; do
-            nix develop --ignore-env --keep-env-var HOME --command steps/fstests/judge \
-              --report "$RUNNER_TEMP/$kind.md"
-          done
-
       - uses: actions/upload-artifact@v7
         with:
           name: report
           path: |
             ${{ runner.temp }}/auto.md
             ${{ runner.temp }}/smoke.md
+
+      - name: Judge the run
+        run: |
+          for kind in auto smoke; do
+            nix develop --ignore-env --keep-env-var HOME --command steps/fstests/judge \
+              --report "$RUNNER_TEMP/$kind.md"
+          done

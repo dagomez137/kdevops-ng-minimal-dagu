@@ -50,6 +50,20 @@ default) and gives each a time-balanced shard of the run's tests, or of
 this host's `shard`; `.github/workflows/sizing.yaml` times one slice of
 `auto` on guests of several shapes.
 
+`baseline` sets the run against an earlier run's `outcomes`: a test that
+passed there and fails here is a regression. The workflow's manual run
+publishes one with `publish`, as the assets of release
+`baseline-<kernel_ref>`, from `runs` runs of `auto` (a test that both
+passed and failed is flaky), to set a patch series on top of that tag
+against:
+
+```sh
+nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+    --command dagu --config config.yaml start fstests -- \
+    kernel_url=file://$HOME/linux kernel_ref=my-series groups=auto tests= \
+    baseline=https://github.com/dagomez137/kdevops-ng-minimal-dagu/releases/download/baseline-v7.3/outcomes
+```
+
 The host needs `/dev/kvm`, `/dev/vhost-vsock` (the `vhost_vsock` module)
 and a `systemd --user` manager; the root step of
 `.github/workflows/fstests.yaml` sets them up on a fresh Ubuntu 24.04

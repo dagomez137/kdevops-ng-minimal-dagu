@@ -9,13 +9,30 @@ name: fstests
 on:
   push:
   workflow_dispatch:
+    inputs:
+      kernel_ref:
+        description: the kernel tag or branch; empty takes the DAG's default
+        default: ""
+      runs:
+        description: how many times to run every test
+        type: number
+        default: 1
+      publish:
+        description: publish the report as release baseline-<kernel_ref>
+        type: boolean
+        default: false
 
 jobs:
   # Builds once and exports the result; every fstests job boots that.
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    outputs:
+      runs: ${{ steps.runs.outputs.runs }}
     steps:
+      - id: runs
+        run: echo "runs=$(seq ${{ inputs.runs || 1 }} | jq --compact-output --slurp .)" >>"$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v5
 
       - name: Prepare the runner (root)
@@ -45,6 +62,7 @@ jobs:
           nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
           --command dagu --config config.yaml start build --
           "export=$RUNNER_TEMP/prebuilt"
+          ${{ inputs.kernel_ref && format('kernel_ref={0}', inputs.kernel_ref) || '' }}
 
       - name: Show the run
         if: always()
@@ -87,12 +105,13 @@ jobs:
         shard: [1/6, 2/6, 3/6, 4/6, 5/6, 6/6]
         groups: [auto]
         tests: [""]
+        run: ${{ fromJSON(needs.build.outputs.runs) }}
         include:
           - section: xfs_bs4k_ss4k
             shard: ""
             groups: ""
             tests: $(grep --invert-match '^#' guest/xfs.smoke | paste --serial --delimiters=' ')
-    name: fstests (${{ matrix.section }} ${{ matrix.shard || 'smoke' }})
+    name: fstests (${{ matrix.section }} ${{ matrix.shard || 'smoke' }} ${{ matrix.run }})
     steps:
       - uses: actions/checkout@v5
 
@@ -152,16 +171,19 @@ jobs:
           name: fstests-${{ matrix.groups || 'smoke' }}-${{ strategy.job-index }}-${{ matrix.section }}
           path: |
             ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
-            ~/.local/state/kdevops-ng-minimal-dagu/report.md
+            ~/.local/state/kdevops-ng-minimal-dagu/report
             ~/.local/state/qemu-system/fstests-*/xfstests
           if-no-files-found: ignore
 
   # One report for the workflow: each section's tests merged from every
-  # guest of every job that ran them, smoke apart from auto.
+  # guest of every job that ran them, smoke apart from auto, set against
+  # the baseline release of the kernel when there is one.
   report:
     needs: fstests
     if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
 
@@ -186,11 +208,19 @@ jobs:
       # artifacts need one.
       - name: Write the report
         run: |
+          ref=$(sed --quiet 's/^kernel_ref=//p' "$RUNNER_TEMP"/fstests/*/qemu-system/*/xfstests/run | head --lines=1)
+          echo "kernel_ref=$ref" >>"$GITHUB_ENV"
+          baseline=https://github.com/$GITHUB_REPOSITORY/releases/download/baseline-$ref/outcomes
+          if ! curl --fail --silent --head --location "$baseline" >/dev/null; then
+            baseline=
+          fi
           report() {
             nix develop --ignore-env --keep-env-var HOME --command steps/fstests/report \
               --shares "$(echo "$RUNNER_TEMP"/fstests/fstests-"$1"-*/qemu-system/fstests-*/xfstests)" \
-              --sections "$2" --notrun guest/xfs.notrun --output "$RUNNER_TEMP/$1.md"
-            { echo "## $1"; cat "$RUNNER_TEMP/$1.md"; } >>"$GITHUB_STEP_SUMMARY"
+              --sections "$2" --notrun guest/xfs.notrun --baseline "$baseline" \
+              --output "$RUNNER_TEMP/report/$1"
+            { echo "## $1"; echo '```'; cat "$RUNNER_TEMP/report/$1/report.txt"; echo '```'; } \
+              >>"$GITHUB_STEP_SUMMARY"
           }
           report auto "xfs_bs4k_ss4k xfs_full_bs4k_ss4k xfs_full_bs16k_ss16k"
           report smoke xfs_bs4k_ss4k
@@ -198,13 +228,30 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: report
-          path: |
-            ${{ runner.temp }}/auto.md
-            ${{ runner.temp }}/smoke.md
+          path: ${{ runner.temp }}/report
 
       - name: Judge the run
         run: |
           for kind in auto smoke; do
             nix develop --ignore-env --keep-env-var HOME --command steps/fstests/judge \
-              --report "$RUNNER_TEMP/$kind.md"
+              --outcomes "$RUNNER_TEMP/report/$kind/outcomes"
           done
+
+      # Only a complete run becomes a baseline.
+      - name: Publish the baseline
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd "$RUNNER_TEMP/report/auto"
+          { echo '```'; cat report.txt; echo '```'; } >notes.md
+          tag=baseline-$kernel_ref
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" --clobber report.txt outcomes notrun
+            gh release edit "$tag" --notes-file notes.md
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --latest=false \
+              --title "fstests baseline for $kernel_ref" --notes-file notes.md \
+              report.txt outcomes notrun
+          fi

@@ -50,6 +50,9 @@ let
     StandardOutput = "journal+console";
     StandardError = "journal+console";
     SyslogIdentifier = "kselftest";
+    # The KTAP in the journal is the verdict; journald's per-service limit
+    # would drop the lines past it, the plan and the totals among them.
+    LogRateLimitIntervalSec = 0;
     # Type=oneshot already disables the start timeout; keep it
     # explicit so nobody bounds a run here. The runner bounds each
     # individual test itself (the per-collection `settings`

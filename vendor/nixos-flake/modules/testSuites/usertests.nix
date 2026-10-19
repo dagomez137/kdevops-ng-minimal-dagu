@@ -50,6 +50,10 @@ in
       StandardOutput = "journal+console";
       StandardError = "journal+console";
       SyslogIdentifier = "usertests";
+      # The output is the verdict, and the maple tree's dumps alone pass
+      # journald's per-service limit (10000 lines in 30 s), which drops the
+      # rest, the summary line with it.
+      LogRateLimitIntervalSec = 0;
       # Type=oneshot already disables the start timeout; keep it
       # explicit so nobody bounds a run here. The caller's own
       # deadline bounds the whole run.

@@ -13,7 +13,7 @@ on:
 jobs:
   # Builds once and exports the result; every fstests job boots that.
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
@@ -78,7 +78,7 @@ jobs:
 
   fstests:
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 350
     strategy:
       fail-fast: false

@@ -87,13 +87,17 @@ minijinja-cli --trim-blocks --output "$units/user/qemu-system@$name.service.d/ov
 	"$qsu/templates/qemu-system-override.conf.j2" "$vars"
 minijinja-cli --trim-blocks --output "$units/qemu-system/$name.env" \
 	"$qsu/templates/vm.env.j2" "$vars"
-cp "$qsu/files/qmp-powerdown" "$units/qemu-system/qmp-powerdown"
-# The three templates are shared by every VM of this user: keep the ones
-# already installed.
+# The helper and the three templates are shared by every VM of this user,
+# and guests render side by side: each lands under a name of this VM's and
+# is renamed into place, so two writers never meet in one file. Templates
+# already installed are kept.
+cp "$qsu/files/qmp-powerdown" "$units/qemu-system/qmp-powerdown.$name"
+mv --force "$units/qemu-system/qmp-powerdown.$name" "$units/qemu-system/qmp-powerdown"
 for unit in qemu-system@.service virtiofsd@.socket virtiofsd@.service; do
 	if [ ! -e "$units/user/$unit" ]; then
-		minijinja-cli --trim-blocks --output "$units/user/$unit" \
+		minijinja-cli --trim-blocks --output "$units/user/$unit.$name" \
 			"$qsu/templates/$unit.j2" "$vars"
+		mv --force "$units/user/$unit.$name" "$units/user/$unit"
 	fi
 done
 for tag in store modules xfstests; do

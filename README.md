@@ -64,8 +64,9 @@ nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
     baseline=https://github.com/dagomez137/kdevops-ng-minimal-dagu/releases/download/baseline-v7.3/outcomes
 ```
 
-The host needs `/dev/kvm`, `/dev/vhost-vsock` (the `vhost_vsock` module)
-and a `systemd --user` manager; the root step of
+The host needs Nix with the `nix-command` and `flakes` features,
+`/dev/kvm`, `/dev/vhost-vsock` (the `vhost_vsock` module) and a
+`systemd --user` manager; the root step of
 `.github/workflows/fstests.yaml` sets them up on a fresh Ubuntu 24.04
 runner and is the list of what a host's owner does by hand. Run logs, the
 kernel, QEMU and the closure GC roots go under

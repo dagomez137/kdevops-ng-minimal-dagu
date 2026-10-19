@@ -470,12 +470,33 @@ def main():
         lines.append(wrap(value, f"  {key:<10}", " " * 12))
 
     lines += ["", "Reproduce:", ""]
+    lines += [
+        wrap(
+            "Once per host: Nix with flakes, the vhost_vsock module, your user"
+            " in the kvm group for /dev/kvm and /dev/vhost-vsock, and a"
+            " systemd --user manager (lingering, when you are not logged in):"
+        ),
+        "",
+        "  mkdir --parents ~/.config/nix",
+        "  echo 'experimental-features = nix-command flakes' \\",
+        "      >>~/.config/nix/nix.conf",
+        "  sudo modprobe vhost_vsock",
+        '  sudo usermod --append --groups kvm "$USER"',
+        '  sudo loginctl enable-linger "$USER"',
+        "",
+        wrap(
+            "The kvm group takes effect at your next login. Ubuntu 23.10 and"
+            " later also refuse virtiofsd its user namespace"
+            " until kernel.apparmor_restrict_unprivileged_userns=0. Then run"
+            " each section's failing tests:"
+        ),
+        "",
+    ]
     lines += reproduce(run, args.sections.split(), failing)
     lines += [
         "",
         wrap(
-            "The host needs /dev/kvm, /dev/vhost-vsock and a systemd --user"
-            " manager, as the README's Run section says. The results land in"
+            "The results land in"
             " ~/.local/state/qemu-system/fstests-1/xfstests/<release>/results;"
             " vms=N splits the tests among N guests."
         ),

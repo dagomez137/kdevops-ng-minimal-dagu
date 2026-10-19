@@ -55,6 +55,15 @@ params:
     default: preset
   - name: config
     default: vendor/linux-config-fragments/defconfigs/imageless_defconfig
+  # The developer tools steps/kernel/devtools gives the group's Linux tree,
+  # none by default: compile_commands (clangd), scripts_gdb (GDB's lx-
+  # commands) and rust_analyzer. They need the tree to hold its build, so the
+  # kernel is built there even when the store has it; in_tree asks for that
+  # alone, as the checks do.
+  - name: devtools
+    default: ""
+  - name: in_tree
+    default: "false"
   # Where steps/nix/export writes; empty exports nothing.
   - name: export
     default: ""
@@ -113,9 +122,19 @@ steps:
       nix develop --ignore-env --keep-env-var HOME .#kernel
       --command steps/kernel/build --src "${params.group}/linux"
       --flags "$STATE/linux.flags" --dir "$STATE/linux" --index "$STATE/index"
-      --output "$DAGU_OUTPUT_FILE"
+      --in-tree ${params.in_tree} --tools "${params.devtools}" --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: kernel
+
+  - id: devtools
+    depends: kernel
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME .#kernel
+      --command steps/kernel/devtools --src "${params.group}/linux"
+      --flags "$STATE/linux.flags" --tools "${params.devtools}"
+    preconditions:
+      - condition: "${params.devtools}"
+        expected: "re:.+"
 
   - id: qemu_src
     depends: host

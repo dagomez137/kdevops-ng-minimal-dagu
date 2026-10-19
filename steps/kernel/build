@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: copyleft-next-0.3.1
 ## Usage: steps/kernel/build --src SRC --flags FILE --dir DIR --index INDEX
-##            --output FILE
+##            --in-tree BOOL --tools TOOLS --output FILE
 ##
 ## Build the configured Linux tree SRC in place with the make arguments in
 ## FILE (steps/kernel/flags), changes to tracked files included, gather the
@@ -9,25 +9,34 @@
 ## INDEX/kernel-<identity> and append kernel=<store path> to FILE. The
 ## identity hashes all that fixes the bytes: the tree, its .config, the make
 ## arguments less the host's paths, this script and the devShell's PATH,
-## which names the toolchain; a kernel already under INDEX is not built
-## again. Run it in the kernel devShell:
+## which names the toolchain. A kernel already under INDEX is not built
+## again, unless SRC must hold that build itself and does not: for the
+## developer tools TOOLS (steps/kernel/devtools), or when BOOL is true, as
+## for the checks. Then make builds it there, only what the tree lacks. The
+## tree's build is never borrowed from the
+## store, as kbuild trusts each .cmd file to describe the object beside it.
+## Run it in the kernel devShell:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME .#kernel \
 ##       --command steps/kernel/build \
 ##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux \
 ##       --flags ~/.local/state/kdevops-ng-minimal-dagu/linux.flags \
 ##       --dir ~/.local/state/kdevops-ng-minimal-dagu/linux \
-##       --index ~/.local/state/kdevops-ng-minimal-dagu/index --output /dev/stdout
+##       --index ~/.local/state/kdevops-ng-minimal-dagu/index --in-tree false \
+##       --tools '' --output /dev/stdout
 set -o errexit -o nounset -o pipefail
 
 while [ $# -gt 0 ]; do
 	case $1 in
-	--src | --flags | --dir | --index | --output) declare "${1#--}=$2" ;;
+	--src | --flags | --dir | --index | --in-tree | --tools | --output)
+		name=${1#--}
+		declare "${name//-/_}=$2"
+		;;
 	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
 	esac
 	shift 2
 done
-: "${src:?} ${flags:?} ${dir:?} ${index:?} ${output:?}"
+: "${src:?} ${flags:?} ${dir:?} ${index:?} ${in_tree:?} ${tools?} ${output:?}"
 
 set -o xtrace
 # The tree as git would commit it now, without touching the real index.
@@ -41,7 +50,11 @@ mapfile -t args <"$flags"
 identity=$(printf '%s\n' "$tree" "$(sha256sum <"$src/.config")" "$(sha256sum <"$0")" "$PATH" \
 	"$(grep --invert-match '^CCACHE_' "$flags" | sed "s|$(dirname "$src")|<tree>|g; s|^CC=ccache |CC=|")" |
 	sha256sum | cut --characters=1-16)
-if kernel=$(readlink --canonicalize-existing "$index/kernel-$identity"); then
+# Which build the tree holds, kept where git keeps its own state.
+holds=$(git -C "$src" rev-parse --path-format=absolute --git-path kdevops-identity)
+if kernel=$(readlink --canonicalize-existing "$index/kernel-$identity") &&
+	{ { [ "$in_tree" != true ] && [ -z "$tools" ]; } ||
+		{ [ -e "$src/vmlinux" ] && [ "$(cat "$holds" 2>/dev/null)" = "$identity" ]; }; }; then
 	echo "kernel=$kernel" >>"$output"
 	exit 0
 fi
@@ -55,6 +68,8 @@ release=$("${make[@]}" --silent kernelrelease)
 cp "$src/$("${make[@]}" --silent image_name)" "$dir/out/bzImage"
 cp "$src/.config" "$dir/out/config"
 rm --force "$dir/out/lib/modules/$release/build"
+
+echo "$identity" >"$holds"
 
 kernel=$(nix store add-path --name "linux-$release" "$dir/out")
 nix build "$kernel" --out-link "$index/kernel-$identity"

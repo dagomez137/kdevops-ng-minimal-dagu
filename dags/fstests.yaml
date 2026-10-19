@@ -55,6 +55,15 @@ params:
     default: preset
   - name: config
     default: vendor/linux-config-fragments/defconfigs/imageless_defconfig
+  # The developer tools steps/kernel/devtools gives the group's Linux tree,
+  # none by default: compile_commands (clangd), scripts_gdb (GDB's lx-
+  # commands) and rust_analyzer. They need the tree to hold its build, so the
+  # kernel is built there even when the store has it; in_tree asks for that
+  # alone, as the checks do.
+  - name: devtools
+    default: ""
+  - name: in_tree
+    default: "false"
   # Sections of guest/xfs.config, run one after the other.
   - name: sections
     default: xfs_bs4k_ss4k
@@ -142,6 +151,8 @@ steps:
         ccache: ${params.ccache}
         config_method: ${params.config_method}
         config: ${params.config}
+        devtools: ${params.devtools}
+        in_tree: ${params.in_tree}
     preconditions:
       - condition: "${params.prebuilt}"
         expected: "re:^$"

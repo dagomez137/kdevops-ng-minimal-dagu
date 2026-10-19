@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/devtools --src SRC --flags FILE --tools TOOLS
+##
+## Give the Linux tree SRC, which holds its build (steps/kernel/build
+## --in-tree true), the developer tools TOOLS, as kdevops-ng's devtools step
+## does, with the make arguments in FILE: compile_commands (compile_commands.json
+## for clangd), scripts_gdb (vmlinux-gdb.py and its lx- commands for GDB) and
+## rust_analyzer (rust-project.json, when CONFIG_RUST is set). Run it in the
+## kernel devShell:
+##
+##   nix develop --ignore-env --keep-env-var HOME .#kernel \
+##       --command steps/kernel/devtools \
+##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux \
+##       --flags ~/.local/state/kdevops-ng-minimal-dagu/linux.flags \
+##       --tools 'compile_commands scripts_gdb rust_analyzer'
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--src | --flags | --tools) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${src:?} ${flags:?} ${tools:?}"
+
+set -o xtrace
+mapfile -t args <"$flags"
+make=(make --no-print-directory --directory="$src" "${args[@]}")
+read -r -a list <<<"$tools"
+for tool in "${list[@]}"; do
+	case $tool in
+	compile_commands)
+		python3 "$src/scripts/clang-tools/gen_compile_commands.py" --directory "$src" \
+			--output "$src/compile_commands.json"
+		;;
+	scripts_gdb) "${make[@]}" scripts_gdb ;;
+	rust_analyzer)
+		if grep --quiet '^CONFIG_RUST=y$' "$src/.config"; then
+			"${make[@]}" rust-analyzer
+		fi
+		;;
+	*)
+		echo "no developer tool $tool" >&2
+		exit 2
+		;;
+	esac
+done

@@ -1,0 +1,125 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+description: >-
+  Boot a guest with what $STATE/build.env names and run a kernel test suite
+  in it, selftests or usertests, one item at a time; then write its report
+  and fail the run only when the suite did not run to the end.
+working_dir: ${params.root}
+
+params:
+  - name: root
+    description: the checkout the steps run from
+  - name: suite
+    description: selftests or usertests
+  - name: items
+    description: the collections or programs to run, empty for all
+  - name: item_timeout
+    description: seconds an item may run before its unit is stopped
+  - name: test_timeout
+    description: seconds kselftest's runner gives a test, 0 for its settings
+  - name: cpus
+    description: the guest's CPUs
+  - name: ram
+    description: the guest's memory in MiB
+
+env:
+  - XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}
+  - STATE: ${HOME}/.local/state/kdevops-ng-minimal-dagu
+  - VM: ${params.suite}-1
+  - VM_STATE: ${HOME}/.local/state/qemu-system/${params.suite}-1
+
+steps:
+  - id: inputs
+    run: >-
+      grep --extended-regexp
+      '^(kernel|kernel_name|qemu|init|initrd|virtiofsd)='
+      "$STATE/build.env" >>"$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: kernel
+      - name: kernel_name
+      - name: qemu
+      - name: init
+      - name: initrd
+      - name: virtiofsd
+
+  - id: key
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/ssh/key --dir "$STATE/ssh" --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: key
+
+  - id: render
+    depends: [inputs, key]
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+      --command steps/qsu/render --name "$VM"
+      --cpus ${params.cpus} --ram ${params.ram}
+      --qemu ${steps.inputs.outputs.qemu} --virtiofsd ${steps.inputs.outputs.virtiofsd}
+      --kernel ${steps.inputs.outputs.kernel} --init ${steps.inputs.outputs.init}
+      --initrd ${steps.inputs.outputs.initrd}
+      --key ${steps.key.outputs.key} --state "$VM_STATE" --qsu vendor/qemu-system-units
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: cid
+
+  - id: boot
+    depends: render
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+      --command steps/qsu/boot --name "$VM" --state "$VM_STATE"
+      --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid}
+
+  - id: kver
+    depends: boot
+    run: >-
+      echo "kver=$(nix develop --ignore-env --keep-env-var HOME
+      --command steps/qsu/ssh --key ${steps.key.outputs.key} --cid ${steps.render.outputs.cid}
+      -- cat /proc/sys/kernel/osrelease)" >>"$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: kver
+
+  # The suite's tree from the store, laid out writable on the guest's share.
+  - id: prepare
+    depends: kver
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/suite/prepare --suite ${params.suite}
+      --build "$STATE/build.env"
+      --share "$VM_STATE/${params.suite}" --kver ${steps.kver.outputs.kver}
+      --timeout ${params.test_timeout} --only "${params.items}"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: unit
+      - name: items
+
+  - id: run
+    depends: prepare
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+      --command steps/suite/run --key ${steps.key.outputs.key}
+      --cid ${steps.render.outputs.cid} --vm "$VM"
+      --unit ${steps.prepare.outputs.unit}
+      --items "${steps.prepare.outputs.items}" --timeout ${params.item_timeout}
+      --dir "$VM_STATE/${params.suite}/${steps.kver.outputs.kver}/results"
+
+  - id: report
+    depends: run
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/suite/report --suite ${params.suite}
+      --dir "$VM_STATE/${params.suite}/${steps.kver.outputs.kver}/results"
+      --items "${steps.prepare.outputs.items}" --run "$STATE/build.env"
+      --output "$STATE/reports/${steps.inputs.outputs.kernel_name}/${params.suite}"
+
+  - id: judge
+    depends: report
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/judge
+      --outcomes "$STATE/reports/${steps.inputs.outputs.kernel_name}/${params.suite}/outcomes"
+
+handler_on:
+  exit:
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR
+      --command systemctl --user stop "qemu-system@$VM.service"

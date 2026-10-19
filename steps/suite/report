@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: copyleft-next-0.3.1
+"""Usage: steps/suite/report --suite selftests|usertests --dir RESULTS
+           --items ITEMS --run FILE --output DIR
+
+Write DIR/report.txt, a plain-text mail on the suite's run of ITEMS in a
+guest, from the logs and outcomes steps/suite/run kept in RESULTS, and
+DIR/outcomes: status=complete|incomplete, the key=value lines of the run
+file FILE (steps/fstests/describe's), then "item test outcome" per test.
+
+A test that fails is reported, not a reason to fail the run; the run is
+incomplete when the pipeline did not see an item through: no log, a start
+that timed out, a lost or crashed guest, or output cut short. kselftest's
+verdict is its KTAP (kdevops-ng's parse_ktap: the plan and the Totals line
+must agree with the results), usertests' its programs' output by kdevops-ng's
+rules: a sanitizer report or a failed assertion fails, and each program must
+print its summary:
+
+    nix develop --ignore-env --keep-env-var HOME \\
+        --command steps/suite/report --suite selftests \\
+        --dir ~/.local/state/qemu-system/selftests-1/selftests/7.3.0/results \\
+        --items 'size timers' \\
+        --run ~/.local/state/qemu-system/selftests-1/selftests/run \\
+        --output ~/.local/state/kdevops-ng-minimal-dagu/reports/v7.3/selftests
+"""
+
+import argparse
+import re
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
+WIDTH = 72
+LOG_LINES = 30
+
+KTAP_RESULT = re.compile(r"^(not ok|ok) \d+ (?:selftests: )?(.*?)(?:\s+#\s*(.*))?$")
+KTAP_PLAN = re.compile(r"^1\.\.(\d+)$")
+KTAP_TOTALS = re.compile(
+    r"^# Totals: pass:(\d+) fail:(\d+) xfail:(\d+) xpass:(\d+) skip:(\d+) error:(\d+)"
+)
+
+# kdevops-ng's f/usertests/common.py catalog: the summary each program must
+# print, and the noise radix-tree's tests print on purpose.
+USERTESTS_SUMMARY = {
+    "vma/vma": r"(\d+) tests run, (\d+) passed, (\d+) failed\.",
+    "radix-tree/xarray": r"XArray: (\d+) of (\d+) tests passed",
+    "radix-tree/maple": r"maple_tree: (\d+) of (\d+) tests passed",
+    "radix-tree/idr-test": r"IDA: (\d+) of (\d+) tests passed",
+    "radix-tree/main": r"^tests completed$",
+}
+USERTESTS_FINDINGS = re.compile(
+    r"ERROR: AddressSanitizer|ERROR: LeakSanitizer|runtime error:|assertion failed at"
+    r"|Test \w+ FAILED"
+)
+USERTESTS_EXPECTED = re.compile(r"assertion failed at .*idr\.c:\d+")
+USERTESTS_IGNORED = re.compile(
+    r'vvv Ignore "not allocated" warnings.*?\^\^\^ "not allocated" warnings over',
+    re.DOTALL,
+)
+
+
+def wrap(text, indent=""):
+    return textwrap.fill(
+        text,
+        WIDTH,
+        initial_indent=indent,
+        subsequent_indent=indent,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+
+
+def escape(item):
+    return subprocess.run(
+        ["systemd-escape", "--", item], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def ktap(item, log):
+    """Each test of a kselftest collection, and why the log is incomplete."""
+    lines = log.splitlines()
+    starts = [i for i, line in enumerate(lines) if line.startswith("TAP version")]
+    lines = lines[starts[-1] :] if starts else lines
+    plan, totals, tests = None, None, []
+    for line in lines:
+        if m := KTAP_PLAN.match(line):
+            plan = int(m.group(1))
+        elif m := KTAP_TOTALS.match(line):
+            totals = [int(g) for g in m.groups()]
+        elif m := KTAP_RESULT.match(line):
+            name = m.group(2).removeprefix(f"{item}: ")
+            directive = m.group(3) or ""
+            if m.group(1) == "not ok":
+                outcome = "fail"
+            elif directive.upper().startswith("SKIP"):
+                outcome = "notrun"
+            else:
+                outcome = "pass"
+            tests.append((name, outcome, directive))
+    problem = None
+    if plan is None:
+        problem = "no KTAP plan"
+    elif plan != len(tests):
+        problem = f"{len(tests)} of {plan} planned results"
+    elif totals:
+        count = {
+            o: sum(1 for t in tests if t[1] == o) for o in ("pass", "fail", "notrun")
+        }
+        p, f, xf, xp, s, e = totals
+        if (p + xf + xp, f + e, s) != (count["pass"], count["fail"], count["notrun"]):
+            problem = "the Totals line disagrees with the results"
+    return tests, problem
+
+
+def usertests(item, log):
+    """A usertests program as one test, and why the log is incomplete."""
+    text = USERTESTS_IGNORED.sub("", log)
+    findings = [
+        line
+        for line in text.splitlines()
+        if USERTESTS_FINDINGS.search(line)
+        and not (
+            item in ("radix-tree/idr-test", "radix-tree/main")
+            and USERTESTS_EXPECTED.search(line)
+        )
+    ]
+    summary = USERTESTS_SUMMARY.get(item)
+    if item == "memblock/main":
+        passed = len(re.findall(r": passed$", text, re.MULTILINE))
+        failed = len(re.findall(r": failed$", text, re.MULTILINE))
+        if failed or not passed:
+            findings.append(f"memblock: {passed} passed, {failed} failed")
+    elif summary:
+        found = re.findall(summary, text, re.MULTILINE)
+        if not found:
+            return [(item, "fail", "no summary line")], None
+        last = found[-1]
+        if item == "vma/vma":
+            ran, _, failed = (int(x) for x in last)
+            if failed or not ran:
+                findings.append(f"vma: {ran} run, {failed} failed")
+        elif isinstance(last, tuple):
+            passed, total = (int(x) for x in last)
+            if passed != total or not total:
+                findings.append(f"{passed} of {total} passed")
+    if findings:
+        return [(item, "fail", findings[0])], None
+    return [(item, "pass", "")], None
+
+
+def main():
+    parser = argparse.ArgumentParser(add_help=False)
+    for option in ("suite", "dir", "items", "run", "output"):
+        parser.add_argument(f"--{option}", required=True)
+    args, rest = parser.parse_known_args()
+    if rest:
+        sys.exit(__doc__)
+    results, output = Path(args.dir), Path(args.output)
+    run = {}
+    if Path(args.run).exists():
+        for line in Path(args.run).read_text().splitlines():
+            key, _, value = line.partition("=")
+            run[key] = value
+
+    rows, problems, logs = [], [], {}
+    for item in args.items.split():
+        instance = escape(item)
+        outcome_file = results / f"{instance}.outcome"
+        log_file = results / f"{instance}.log"
+        outcome = outcome_file.read_text().strip() if outcome_file.exists() else ""
+        if outcome != "finished":
+            problems.append(f"{item}: {outcome or 'never ran'}")
+            continue
+        log = log_file.read_text(errors="replace") if log_file.exists() else ""
+        logs[item] = log
+        parse = ktap if args.suite == "selftests" else usertests
+        tests, problem = parse(item, log)
+        if problem:
+            problems.append(f"{item}: {problem}")
+        rows += [(item, *test) for test in tests]
+
+    failing = [r for r in rows if r[2] == "fail"]
+    counts = {o: sum(1 for r in rows if r[2] == o) for o in ("pass", "fail", "notrun")}
+    kernel = run.get("kernel_name") or run.get("kernel_ref", "unknown kernel")
+    incomplete = bool(problems)
+    lines = [
+        f"Subject: [{args.suite}] {kernel}: "
+        + ("incomplete, " if incomplete else "")
+        + f"{len(failing)} failing tests",
+        "",
+        wrap(
+            f"{args.suite} ran {len(rows)} tests of {len(args.items.split())} items on"
+            f" {kernel} ({run.get('kernel_commit', '')[:12]}):"
+            f" {counts['pass']} passed, {counts['fail']} failed,"
+            f" {counts['notrun']} skipped."
+        ),
+    ]
+    if problems:
+        lines += ["", "The run is incomplete:", ""]
+        lines += [wrap(p, "  ") for p in problems]
+    if failing:
+        lines += ["", "Failures:", ""]
+        lines += [f"  {item}: {name}  {why}".rstrip() for item, name, _, why in failing]
+        for item in dict.fromkeys(r[0] for r in failing):
+            tail = logs[item].splitlines()[-LOG_LINES:]
+            lines += ["", "-" * WIDTH, f"{item}, the last {len(tail)} lines:", ""]
+            lines += tail
+    lines += ["", "What ran:", ""]
+    for key in ("kernel", "compiler", "selftests", "usertests", "harness_commit"):
+        if run.get(key):
+            lines.append(f"  {key:<10}{run[key]}")
+    text = "\n".join(lines) + "\n"
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "report.txt").write_text(text)
+    with (output / "outcomes").open("w") as out:
+        out.write(f"status={'incomplete' if incomplete else 'complete'}\n")
+        for key, value in run.items():
+            out.write(f"{key}={value}\n")
+        for item, name, outcome, _ in rows:
+            out.write(f"{item} {name.replace(' ', '_')} {outcome}\n")
+    sys.stdout.write(text)
+    for name in ("report.txt", "outcomes"):
+        print(f"wrote {(output / name).resolve()}")
+
+
+if __name__ == "__main__":
+    main()

@@ -7,8 +7,9 @@
 ## Write the qemu-system@VM.service unit, its virtiofsd shares and NVMe
 ## drives from the qemu-system-units checkout QSU into ~/.config/systemd.
 ## The guest has N CPUs and MIB MiB of memory, boots KERNEL (its image and
-## modules) with the NixOS INIT and INITRD, and gets three shares: the Nix
-## store, the kernel's modules and DIR/xfstests, three NVMe drives that
+## modules) with the NixOS INIT and INITRD, and gets five shares: the Nix
+## store, the kernel's modules and DIR/{xfstests,selftests,usertests} for the
+## suites, three NVMe drives that
 ## write 128 KiB atomically (Linux reads only the per-namespace NAWUPF) and a
 ## vsock device. Root in the guest accepts the SSH key FILE, handed over as
 ## the ssh.authorized_keys.root credential on the kernel command line. DIR is
@@ -48,7 +49,7 @@ hash=$(printf '%s' "$name" | sha256sum)
 cid=$((100 + 16#${hash:0:8} % 9973))
 credential=$(base64 --wrap=0 "$key.pub")
 # virtiofsd refuses to start on a missing shared directory, and the VM with it.
-mkdir --parents "$state/xfstests"
+mkdir --parents "$state/xfstests" "$state/selftests" "$state/usertests"
 vars=$state/vars.json
 jq --null-input --arg name "$name" --arg qemu "$qemu" --arg virtiofsd "$virtiofsd" \
 	--arg kernel "$kernel" --arg init "$init" --arg initrd "$initrd" --arg state "$state" \
@@ -68,7 +69,9 @@ jq --null-input --arg name "$name" --arg qemu "$qemu" --arg virtiofsd "$virtiofs
 	shares: [
 		{tag: "store", dir: "/nix/store"},
 		{tag: "modules", dir: "\($kernel)/lib/modules"},
-		{tag: "xfstests", dir: "\($state)/xfstests"}
+		{tag: "xfstests", dir: "\($state)/xfstests"},
+		{tag: "selftests", dir: "\($state)/selftests"},
+		{tag: "usertests", dir: "\($state)/usertests"}
 	],
 	nvme: {drives: [range(3) | {namespaces: [{
 		file: "\($state)/nvme\(.).raw",
@@ -100,7 +103,7 @@ for unit in qemu-system@.service virtiofsd@.socket virtiofsd@.service; do
 		mv --force "$units/user/$unit.$name" "$units/user/$unit"
 	fi
 done
-for tag in store modules xfstests; do
+for tag in store modules xfstests selftests usertests; do
 	mkdir --parents "$units/user/virtiofsd@$name-$tag.service.d"
 	minijinja-cli --trim-blocks --define share_tag="$tag" \
 		--output "$units/virtiofsd/$name-$tag.env" \

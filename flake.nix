@@ -130,12 +130,16 @@
         };
       };
 
-      nixosConfigurations.fstests = nixpkgs.lib.nixosSystem {
+      # The guest, with the three suites' units: fstests, kselftest and the
+      # userspace harnesses.
+      nixosConfigurations.guest = nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
           nixos-flake.nixosModules.backends.imageless
           nixos-flake.nixosModules.mounts.shares
           nixos-flake.nixosModules.testSuites.fstests
+          nixos-flake.nixosModules.testSuites.selftests
+          nixos-flake.nixosModules.testSuites.usertests
           {
             nixpkgs.overlays = [
               nixos-flake.overlays.default
@@ -162,7 +166,7 @@
               )
             ];
           }
-          ./guest/fstests.nix
+          ./guest/shares.nix
         ];
       };
     };

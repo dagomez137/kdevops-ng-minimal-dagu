@@ -135,8 +135,8 @@ The kernel is built from a shallow clone with the build timestamp, user,
 host, counter and source paths pinned, then added to the Nix store, so the
 same tag gives the same store path on any host.
 
-The guest is nixos-flake's imageless backend and fstests module plus the
-xfstests share (`guest/fstests.nix`). The fstests module's
+The guest is nixos-flake's imageless backend, its fstests, selftests and
+usertests modules and a share for each (`guest/shares.nix`). The fstests module's
 `xfstests@<section>.service` runs `check -s <section>` with the config and
 environment the host laid down on the share, formats the test device itself
 (`RECREATE_TEST_DEV`), runs every test in a scope that systemd kills after

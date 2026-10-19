@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+description: >-
+  Build the kernel and its kselftests, boot a guest and run the collections in it, one at a time (kdevops-ng's selftests flow).
+working_dir: ..
+
+params:
+  - name: kernel_url
+    default: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+  - name: kernel_ref
+    default: v7.3
+  - name: group
+    default: $HOME/.local/state/kdevops-ng-minimal-dagu/src
+  - name: kernel_repo
+    default: ""
+  - name: qemu_repo
+    default: ""
+  - name: compiler
+    default: clang
+  - name: ccache
+    default: "false"
+  - name: config_method
+    default: preset
+  - name: config
+    default: vendor/linux-config-fragments/defconfigs/imageless_defconfig
+  # The collections to build (kdevops-ng's default set) and, of those, the
+  # ones to run, empty for all.
+  - name: selftests
+    default: >-
+      size breakpoints kcmp mincore splice sync clone3 fchmodat2 mount_setattr
+      memfd mqueue syscall_user_dispatch ptrace seccomp cgroup futex rlimits
+      capabilities exec proc sysctl lib kmod module firmware timers
+      kselftest_harness
+  - name: items
+    default: ""
+  # Seconds kselftest's runner gives a test, 0 for each collection's
+  # settings; kmod needs some 300 and has none.
+  - name: test_timeout
+    default: 300
+  - name: item_timeout
+    default: 3600
+  - name: cpus
+    type: integer
+    default: 4
+  - name: ram
+    type: integer
+    default: 4096
+
+steps:
+  - id: build
+    action: dag.run
+    with:
+      dag: build
+      params:
+        kernel_url: ${params.kernel_url}
+        kernel_ref: ${params.kernel_ref}
+        group: ${params.group}
+        kernel_repo: ${params.kernel_repo}
+        qemu_repo: ${params.qemu_repo}
+        compiler: ${params.compiler}
+        ccache: ${params.ccache}
+        config_method: ${params.config_method}
+        config: ${params.config}
+        selftests: ${params.selftests}
+
+  # Dagu resolves the suite DAG's relative working_dir against a temporary
+  # copy, so it takes the checkout from here.
+  - id: root
+    run: echo "root=$PWD" >>"$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: root
+
+  - id: suite
+    depends: [build, root]
+    action: dag.run
+    with:
+      dag: suite
+      params:
+        root: ${steps.root.outputs.root}
+        suite: selftests
+        items: ${params.items}
+        item_timeout: ${params.item_timeout}
+        test_timeout: ${params.test_timeout}
+        cpus: ${params.cpus}
+        ram: ${params.ram}

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 ## Usage: steps/nix/closure --flake FLAKE --fstests TREE --dir DIR --output FILE
 ##
-## Build the fstests guest's NixOS system closure from FLAKE, with fstests
+## Build the guest's NixOS system closure from FLAKE, with fstests
 ## built from the git TREE as it stands, uncommitted changes included, or
 ## FLAKE's pinned fstests when TREE is empty; keep it as DIR/toplevel and
 ## append init=<path> and initrd=<path> from its bootspec to FILE:
@@ -28,7 +28,7 @@ override=()
 if [ -n "$fstests" ]; then
 	override=(--override-input xfstests-src "git+file://$fstests")
 fi
-nix build "$flake#nixosConfigurations.fstests.config.system.build.toplevel" \
+nix build "$flake#nixosConfigurations.guest.config.system.build.toplevel" \
 	"${override[@]}" --out-link "$dir/toplevel"
 jq --raw-output '."org.nixos.bootspec.v1" | "init=\(.init)", "initrd=\(.initrd)"' \
 	"$dir/toplevel/boot.json" >>"$output"

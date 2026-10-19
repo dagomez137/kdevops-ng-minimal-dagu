@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/suite/run --key FILE --cid CID --vm VM --unit TEMPLATE
+##            --items ITEMS --timeout SEC --dir DIR
+##
+## Run each of ITEMS in the guest VM, one after the other, as the oneshot
+## TEMPLATE@<the item, systemd-escaped>.service, and keep in DIR its journal
+## (from a cursor taken just before the start, so no earlier run's lines)
+## as <escaped item>.log and how its start ended as <escaped item>.outcome:
+## finished when the start job ended, whatever the unit's result; timed_out
+## when it had not after SEC seconds, in which case the unit is stopped;
+## crashed when the guest died, after which nothing more runs. The verdict
+## is the suite's own output in the logs, read by its report step:
+##
+##   nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
+##       --command steps/suite/run \
+##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 --cid 4242 \
+##       --vm selftests-1 --unit kselftest --items 'size timers' --timeout 900 \
+##       --dir ~/.local/state/qemu-system/selftests-1/selftests/7.3.0/results
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--key | --cid | --vm | --unit | --items | --timeout | --dir) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${key:?} ${cid:?} ${vm:?} ${unit:?} ${items:?} ${timeout:?} ${dir:?}"
+
+ssh=("$(dirname "$0")/../qsu/ssh" --key "$key" --cid "$cid")
+set -o xtrace
+rm --recursive --force "$dir"
+mkdir --parents "$dir"
+read -r -a list <<<"$items"
+for item in "${list[@]}"; do
+	instance=$(systemd-escape -- "$item")
+	# ssh hands the guest's shell one line, and an escaped name has
+	# backslashes.
+	name=$(printf '%q' "$unit@$instance.service")
+	cursor=$("${ssh[@]}" -- journalctl --lines=0 --show-cursor | sed --quiet 's/^-- cursor: //p')
+	status=0
+	timeout --kill-after=30 "$timeout" "${ssh[@]}" -- systemctl start "$name" || status=$?
+	# systemctl start exits 1 when the job ended with the unit failed, 124 is
+	# timeout's own status and 255 is ssh's.
+	case $status in
+	0 | 1) outcome=finished ;;
+	124)
+		outcome=timed_out
+		"${ssh[@]}" -- systemctl stop "$name" || true
+		;;
+	*)
+		if "${ssh[@]}" -- true; then
+			outcome=lost
+		else
+			outcome=crashed
+			systemctl --user kill --signal=SIGKILL "qemu-system@$vm.service" || true
+		fi
+		;;
+	esac
+	echo "$outcome" >"$dir/$instance.outcome"
+	if [ "$outcome" = crashed ]; then
+		break
+	fi
+	"${ssh[@]}" -- journalctl --output=cat --after-cursor="$(printf '%q' "$cursor")" --unit="$name" \
+		>"$dir/$instance.log" || true
+done

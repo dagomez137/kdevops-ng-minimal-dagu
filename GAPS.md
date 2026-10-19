@@ -193,5 +193,5 @@ and the kernel has no NFSD, so the NFSD configuration and RPC pipe
 filesystems fail to mount, `systemctl is-system-running` answers
 `degraded` and `steps/qsu/boot` takes that as booted, as kdevops-ng's
 `f/qsu/settle.py` does; a guest unit that fails for another reason passes
-the same way. Turning the server off in `guest/fstests.nix`, or NFSD on
+the same way. Turning the server off in a guest module, or NFSD on
 in the kernel, would let boot wait for `running`.

@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+description: >-
+  Build the kernel's userspace test harnesses, boot a guest and run their programs in it, one at a time (kdevops-ng's usertests flow).
+working_dir: ..
+
+params:
+  - name: kernel_url
+    default: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+  - name: kernel_ref
+    default: v7.3
+  - name: group
+    default: $HOME/.local/state/kdevops-ng-minimal-dagu/src
+  - name: kernel_repo
+    default: ""
+  - name: qemu_repo
+    default: ""
+  - name: compiler
+    default: clang
+  - name: ccache
+    default: "false"
+  - name: config_method
+    default: preset
+  - name: config
+    default: vendor/linux-config-fragments/defconfigs/imageless_defconfig
+  # The harnesses to build (kdevops-ng's default set) and, of their
+  # programs, the ones to run, empty for all.
+  - name: usertests
+    default: radix-tree vma memblock
+  - name: items
+    default: ""
+  - name: test_timeout
+    default: 0
+  - name: item_timeout
+    default: 1200
+  - name: cpus
+    type: integer
+    default: 4
+  - name: ram
+    type: integer
+    default: 4096
+
+steps:
+  - id: build
+    action: dag.run
+    with:
+      dag: build
+      params:
+        kernel_url: ${params.kernel_url}
+        kernel_ref: ${params.kernel_ref}
+        group: ${params.group}
+        kernel_repo: ${params.kernel_repo}
+        qemu_repo: ${params.qemu_repo}
+        compiler: ${params.compiler}
+        ccache: ${params.ccache}
+        config_method: ${params.config_method}
+        config: ${params.config}
+        usertests: ${params.usertests}
+
+  # Dagu resolves the suite DAG's relative working_dir against a temporary
+  # copy, so it takes the checkout from here.
+  - id: root
+    run: echo "root=$PWD" >>"$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: root
+
+  - id: suite
+    depends: [build, root]
+    action: dag.run
+    with:
+      dag: suite
+      params:
+        root: ${steps.root.outputs.root}
+        suite: usertests
+        items: ${params.items}
+        item_timeout: ${params.item_timeout}
+        test_timeout: ${params.test_timeout}
+        cpus: ${params.cpus}
+        ram: ${params.ram}

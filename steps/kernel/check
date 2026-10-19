@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/check --check NAME --src SRC --flags FILE --base BASE
+##            --patches DIR --strict BOOL --dir LOGS --results FILE
+##
+## Run kdevops-ng's pre-submission check NAME on the built Linux tree SRC
+## with the make arguments in FILE, over the series BASE..HEAD, which DIR
+## holds as patches (git format-patch). Its log goes to LOGS/NAME.log and
+## one line to FILE: "NAME VERDICT ERRORS WARNINGS REASON", the verdict
+## passed, failed or skipped. An error-level finding fails a check and a
+## warning is only counted, as in kdevops-ng; a check fails the step only
+## when it could not run. NAME is one of:
+##
+##   W=1            build the series' objects again with W=1
+##   checkpatch     scripts/checkpatch.pl on the patches (--strict when BOOL)
+##   sparse         make C=2 on the series' objects
+##   checkstack     make checkstack; frames over 512 bytes are warnings
+##   kernel-doc     scripts/kernel-doc -Wall on the files the series touches
+##   check-uapi     scripts/check-uapi.sh, when the series touches a UAPI header
+##   coccicheck     make coccicheck MODE=report on the series' directories
+##   clang-tidy     scripts/clang-tools/run-clang-tools.py on the series' files
+##   clang-analyzer
+##   htmldocs       make htmldocs on the Documentation the series touches
+##   rustavailable  make rustavailable
+##   rustfmt        make rustfmtcheck
+##   clippy         make CLIPPY=1
+##   rustdoc        make rustdoc
+##   rusttest       make rusttest
+##   get_maintainer scripts/get_maintainer.pl on the patches, informational
+##
+## Run it in the check devShell:
+##
+##   nix develop --ignore-env --keep-env-var HOME .#check \
+##       --command steps/kernel/check --check sparse \
+##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux \
+##       --flags ~/.local/state/kdevops-ng-minimal-dagu/linux.flags --base v7.3 \
+##       --patches ~/.local/state/kdevops-ng-minimal-dagu/checks/patches \
+##       --strict true --dir ~/.local/state/kdevops-ng-minimal-dagu/checks \
+##       --results /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--check | --src | --flags | --base | --patches | --strict | --dir | --results)
+		declare "${1#--}=$2"
+		;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${check:?} ${src:?} ${flags:?} ${base:?} ${patches:?} ${strict:?} ${dir:?} ${results:?}"
+
+set -o xtrace
+mkdir --parents "$dir"
+log=$dir/$check.log
+: >"$log"
+mapfile -t args <"$flags"
+make=(make --no-print-directory --directory="$src" --jobs="$(nproc)")
+# A CONFIG_WERROR build would stop at the first warning; a check counts them.
+counting=()
+for arg in "${args[@]}"; do
+	case $arg in
+	KCFLAGS=*) counting+=("$arg -Wno-error") ;;
+	KRUSTFLAGS=*) counting+=("$arg --cap-lints=warn") ;;
+	*) counting+=("$arg") ;;
+	esac
+done
+series=("$patches"/*.patch)
+mapfile -t files < <(git -C "$src" diff --name-only "$base" HEAD)
+# The objects the series' C files build into, the ones kbuild has a
+# command line for.
+objects=()
+for file in "${files[@]}"; do
+	case $file in
+	*.c)
+		object=${file%.c}.o
+		if [ -e "$src/$(dirname "$object")/.$(basename "$object").cmd" ]; then
+			objects+=("$object")
+		fi
+		;;
+	esac
+done
+has() {
+	grep --quiet "^$1=y$" "$src/.config"
+}
+count() {
+	grep --count --extended-regexp "$1" "$log" || true
+}
+result() {
+	echo "$check $1 ${2:-0} ${3:-0} ${4:-}" >>"$results"
+	exit 0
+}
+
+case $check in
+W=1 | sparse)
+	if [ ${#objects[@]} -eq 0 ]; then
+		result skipped 0 0 "no C file of the series is built"
+	fi
+	if [ "$check" = sparse ]; then
+		extra=(C=2)
+	else
+		extra=(W=1)
+		rm --force "${objects[@]/#/$src/}"
+	fi
+	rc=0
+	"${make[@]}" "${counting[@]}" "${extra[@]}" "${objects[@]}" >"$log" 2>&1 || rc=$?
+	if grep --quiet 'is not available or not up to date' "$log"; then
+		echo "sparse is not available" >&2
+		exit 1
+	fi
+	errors=$(count ' error: ')
+	if [ "$rc" -ne 0 ] && [ "$errors" -eq 0 ]; then
+		errors=1
+	fi
+	;;
+checkpatch)
+	if ! [ -e "${series[0]}" ]; then
+		result skipped 0 0 "the series is empty"
+	fi
+	strictness=()
+	if [ "$strict" = true ]; then
+		strictness=(--strict)
+	fi
+	"$src/scripts/checkpatch.pl" --terse --show-types "${strictness[@]}" \
+		"${series[@]}" >"$log" 2>&1 || true
+	if ! grep --quiet 'total:' "$log"; then
+		echo "checkpatch did not run" >&2
+		exit 1
+	fi
+	errors=$(count ': ERROR:')
+	result "$([ "$errors" -eq 0 ] && echo passed || echo failed)" "$errors" \
+		"$(count ': (WARNING|CHECK):')"
+	;;
+checkstack)
+	"${make[@]}" "${args[@]}" checkstack >"$log" 2>&1
+	warnings=$(awk '{ size = $NF; gsub(/[^0-9]/, "", size); if (size + 0 > 512) n++ }
+		END { print n + 0 }' "$log")
+	result passed 0 "$warnings"
+	;;
+kernel-doc)
+	mapfile -t sources < <(printf '%s\n' "${files[@]}" | grep --extended-regexp '\.(c|h|rst)$' || true)
+	if [ ${#sources[@]} -eq 0 ]; then
+		result skipped 0 0 "the series touches no source"
+	fi
+	(cd "$src" && scripts/kernel-doc --none -Wall "${sources[@]}") >"$log" 2>&1 || true
+	errors=$(count 'error:')
+	;;
+check-uapi)
+	if ! printf '%s\n' "${files[@]}" | grep --quiet --extended-regexp '(^|/)include/uapi/'; then
+		result skipped 0 0 "the series touches no UAPI header"
+	fi
+	# check-uapi.sh probes libdw through ldconfig, which fails under clang
+	# on Nix.
+	rc=0
+	(cd "$src" && env CC=gcc scripts/check-uapi.sh -b HEAD -p "$base" -l "$log.errors") \
+		>"$log" 2>&1 || rc=$?
+	case $rc in
+	0) errors=0 ;;
+	1) errors=1 ;;
+	*)
+		echo "check-uapi.sh could not run" >&2
+		exit 1
+		;;
+	esac
+	;;
+coccicheck)
+	mapfile -t dirs < <(printf '%s\n' "${objects[@]}" | xargs --no-run-if-empty dirname | sort --unique)
+	if [ ${#dirs[@]} -eq 0 ]; then
+		result skipped 0 0 "no C file of the series is built"
+	fi
+	for d in "${dirs[@]}"; do
+		env --unset=PKG_CONFIG_PATH "${make[@]}" "${args[@]}" coccicheck MODE=report \
+			M="$d" >>"$log" 2>&1 || true
+	done
+	result passed 0 "$(count ':[0-9]+:[0-9]+-[0-9]+: ')"
+	;;
+clang-tidy | clang-analyzer)
+	if ! has CONFIG_CC_IS_CLANG; then
+		result skipped 0 0 "the kernel is not built with clang"
+	fi
+	mapfile -t sources < <(printf '%s\n' "${files[@]}" | grep '\.c$' || true)
+	if [ ${#sources[@]} -eq 0 ]; then
+		result skipped 0 0 "the series touches no C file"
+	fi
+	python3 "$src/scripts/clang-tools/gen_compile_commands.py" --directory "$src" \
+		--output "$dir/compile_commands.all.json"
+	jq --arg src "$src" --argjson files "$(printf '%s\n' "${sources[@]}" | jq --raw-input . | jq --slurp .)" \
+		'[.[] | select(.file as $f | $files | any(. as $s | $f == "\($src)/\($s)"))]' \
+		"$dir/compile_commands.all.json" >"$dir/compile_commands.json"
+	rc=0
+	(cd "$src" && python3 scripts/clang-tools/run-clang-tools.py "$check" \
+		"$dir/compile_commands.json") >"$log" 2>&1 || rc=$?
+	errors=$(count ' error: ')
+	if [ "$rc" -ne 0 ] && [ "$errors" -eq 0 ]; then
+		errors=1
+	fi
+	;;
+htmldocs)
+	mapfile -t docs < <(printf '%s\n' "${files[@]}" | sed --quiet 's|^Documentation/\([^/]*\)/.*|\1|p' | sort --unique)
+	if [ ${#docs[@]} -eq 0 ]; then
+		result skipped 0 0 "the series touches no Documentation directory"
+	fi
+	rc=0
+	"${make[@]}" "${args[@]}" SPHINXDIRS="${docs[*]}" htmldocs >"$log" 2>&1 || rc=$?
+	errors=$(count 'ERROR')
+	if [ "$rc" -ne 0 ] && [ "$errors" -eq 0 ]; then
+		errors=1
+	fi
+	;;
+rustavailable | rustfmt | clippy | rustdoc | rusttest)
+	if ! has CONFIG_RUST; then
+		result skipped 0 0 "the kernel is built without Rust"
+	fi
+	case $check in
+	rustavailable) goal=(rustavailable) ;;
+	rustfmt) goal=(rustfmtcheck) ;;
+	clippy) goal=(CLIPPY=1) ;;
+	rustdoc) goal=(rustdoc) ;;
+	rusttest) goal=(rusttest) ;;
+	esac
+	rc=0
+	"${make[@]}" "${counting[@]}" "${goal[@]}" >"$log" 2>&1 || rc=$?
+	case $check in
+	rustfmt) errors=$(count '^Diff in ') ;;
+	rusttest) errors=$(grep --only-matching --extended-regexp 'test result: [A-Za-z]+\. [0-9]+ passed; [0-9]+ failed' "$log" |
+		awk '{ n += $(NF - 1) } END { print n + 0 }' || true) ;;
+	*) errors=$(count '^error') ;;
+	esac
+	if [ "$rc" -ne 0 ] && [ "$errors" -eq 0 ]; then
+		errors=1
+	fi
+	;;
+get_maintainer)
+	if ! [ -e "${series[0]}" ]; then
+		result skipped 0 0 "the series is empty"
+	fi
+	(cd "$src" && scripts/get_maintainer.pl "${series[@]}") >"$log" 2>&1
+	result passed 0 0 "$(wc --lines <"$log") recipients"
+	;;
+*)
+	echo "no check $check" >&2
+	exit 2
+	;;
+esac
+result "$([ "$errors" -eq 0 ] && echo passed || echo failed)" "$errors" "$(count ' warning:')"

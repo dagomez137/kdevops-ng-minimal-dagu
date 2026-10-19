@@ -88,6 +88,17 @@
           shellHook = old.shellHook + shellHook;
         });
 
+        # kdevops-ng's check-kernel: build-kernel plus the checkers
+        # (sparse 0.6.5-rc1, coccinelle, clippy, libabigail, Sphinx); jq
+        # filters the compile database for the clang checks.
+        check = nixos-flake.devShells.${system}.check-kernel.overrideAttrs (old: {
+          nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.jq ];
+          buildInputs = old.buildInputs ++ [ pkgs.zlib ];
+          inherit (env) GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM NIX_SSL_CERT_FILE;
+          hardeningDisable = [ "all" ];
+          shellHook = old.shellHook + shellHook;
+        });
+
         # QEMU's configure builds a Python venv offline, from the setuptools,
         # wheel and pip it finds.
         qemu = pkgs.mkShell {

@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: copyleft-next-0.3.1
+description: >-
+  Build the group's Linux tree and run kdevops-ng's pre-submission checks on
+  its series, one after the other, then write their report.
+working_dir: ..
+
+params:
+  - name: kernel_url
+    default: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+  - name: kernel_ref
+    default: v7.3
+  - name: group
+    default: $HOME/.local/state/kdevops-ng-minimal-dagu/src
+  - name: kernel_repo
+    default: ""
+  # The build DAG's kernel parameters, which the checks build with.
+  - name: compiler
+    default: clang
+  - name: extra_warn
+    default: ""
+  - name: kcflags
+    default: ""
+  - name: make_flags
+    default: ""
+  - name: ccache
+    default: "false"
+  - name: config_method
+    default: preset
+  - name: config
+    default: vendor/linux-config-fragments/defconfigs/imageless_defconfig
+  # The series is base..kernel_ref; an empty base is the newest tag the ref
+  # descends from.
+  - name: base
+    default: ""
+  # The checks to run, in order: kdevops-ng's default set. coccicheck,
+  # clang-tidy, clang-analyzer and htmldocs are the others.
+  - name: checks
+    default: >-
+      W=1 checkpatch sparse checkstack kernel-doc check-uapi rustavailable
+      rustfmt clippy rustdoc rusttest get_maintainer
+  # checkpatch --strict.
+  - name: strict
+    default: "true"
+
+env:
+  - STATE: ${HOME}/.local/state/kdevops-ng-minimal-dagu
+
+steps:
+  - id: build
+    action: dag.run
+    with:
+      dag: build
+      params:
+        kernel_url: ${params.kernel_url}
+        kernel_ref: ${params.kernel_ref}
+        group: ${params.group}
+        kernel_repo: ${params.kernel_repo}
+        compiler: ${params.compiler}
+        extra_warn: ${params.extra_warn}
+        kcflags: ${params.kcflags}
+        make_flags: ${params.make_flags}
+        ccache: ${params.ccache}
+        # The checks read the objects, so the tree must hold the build.
+        in_tree: "true"
+        config_method: ${params.config_method}
+        config: ${params.config}
+
+  - id: name
+    depends: build
+    run: grep '^kernel_name=' "$STATE/build.env" >>"$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: kernel_name
+
+  - id: series
+    depends: build
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/kernel/series --src "${params.group}/linux" --base "${params.base}"
+      --dir "$STATE/checks/patches" --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: base
+
+  - id: clear
+    depends: series
+    run: rm --force "$STATE/checks/results"
+
+  # Dagu resolves the check DAG's relative working_dir against a temporary
+  # copy, so it takes the checkout from here.
+  - id: root
+    run: echo "root=$PWD" >>"$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: root
+
+  # One check at a time, as each makes in the same tree; a failed check does
+  # not stop the next.
+  - id: checks
+    depends: [clear, root]
+    action: dag.run
+    with:
+      dag: check
+      params:
+        root: ${steps.root.outputs.root}
+        check: ${ITEM}
+        group: ${params.group}
+        base: ${steps.series.outputs.base}
+        strict: ${params.strict}
+    parallel:
+      items: ${params.checks}
+      max_concurrent: 1
+    continue_on: failed
+
+  - id: report
+    depends: [checks, name]
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/kernel/checks-report --results "$STATE/checks/results"
+      --src "${params.group}/linux" --base ${steps.series.outputs.base}
+      --name ${steps.name.outputs.kernel_name} --logs "$STATE/checks"
+      --output "$STATE/reports/${steps.name.outputs.kernel_name}/checks"
+
+---
+name: check
+description: Run one of kdevops-ng's pre-submission checks.
+working_dir: ${params.root}
+
+params:
+  - name: root
+    description: the checkout the steps run from
+  - name: check
+    description: the check, one of steps/kernel/check's
+  - name: group
+    description: the worktree group whose Linux tree is checked
+  - name: base
+    description: the commit the series starts after
+  - name: strict
+    description: checkpatch --strict
+
+env:
+  - STATE: ${HOME}/.local/state/kdevops-ng-minimal-dagu
+
+steps:
+  - id: check
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME .#check
+      --command steps/kernel/check --check '${params.check}' --src "${params.group}/linux"
+      --flags "$STATE/linux.flags" --base ${params.base} --patches "$STATE/checks/patches"
+      --strict ${params.strict} --dir "$STATE/checks" --results "$STATE/checks/results"

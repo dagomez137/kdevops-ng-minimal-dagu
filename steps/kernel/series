@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/series --src SRC --base BASE --dir DIR --output FILE
+##
+## Write the series BASE..HEAD of the Linux tree SRC to DIR as patches
+## (git format-patch, with a cover letter when there are several) and
+## append base=<the commit BASE names> to FILE. An empty BASE is the newest
+## tag HEAD descends from, so a branch on v7.3 is checked from v7.3:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/kernel/series \
+##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux --base v7.3 \
+##       --dir ~/.local/state/kdevops-ng-minimal-dagu/checks/patches --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--src | --base | --dir | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${src:?} ${base?} ${dir:?} ${output:?}"
+
+set -o xtrace
+if [ -z "$base" ]; then
+	base=$(git -C "$src" describe --tags --abbrev=0 HEAD)
+fi
+commit=$(git -C "$src" rev-parse --verify "$base^{commit}")
+rm --recursive --force "$dir"
+mkdir --parents "$dir"
+cover=()
+if [ "$(git -C "$src" rev-list --count "$commit..HEAD")" -gt 1 ]; then
+	cover=(--cover-letter)
+fi
+git -C "$src" format-patch --quiet --output-directory "$dir" --base="$commit" \
+	"${cover[@]}" "$commit..HEAD"
+echo "base=$commit" >>"$output"

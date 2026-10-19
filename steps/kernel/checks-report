@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/kernel/checks-report --results FILE --src SRC --base BASE
+##            --name NAME --logs LOGS --output DIR
+##
+## Write DIR/report.txt, a plain-text mail on the checks steps/kernel/check
+## recorded in FILE for the series BASE..HEAD of the Linux tree SRC, the
+## kernel NAME: a line per check and the log of each that failed, its last
+## lines from LOGS. Copy FILE to DIR/results and fail when a check failed:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/kernel/checks-report \
+##       --results ~/.local/state/kdevops-ng-minimal-dagu/checks/results \
+##       --src ~/.local/state/kdevops-ng-minimal-dagu/src/linux --base v7.3 \
+##       --name v7.3 --logs ~/.local/state/kdevops-ng-minimal-dagu/checks \
+##       --output ~/.local/state/kdevops-ng-minimal-dagu/reports/v7.3/checks
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--results | --src | --base | --name | --logs | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${results:?} ${src:?} ${base:?} ${name:?} ${logs:?} ${output:?}"
+
+set -o xtrace
+mkdir --parents "$output"
+cp "$results" "$output/results"
+failed=$(awk '$2 == "failed" { n++ } END { print n + 0 }' "$results")
+commits=$(git -C "$src" rev-list --count "$base..HEAD")
+{
+	echo "Subject: [checks] $name: $failed failed of $(wc --lines <"$results") checks"
+	echo
+	echo "kdevops-ng's pre-submission checks on $commits commits, $base..$(git -C "$src" rev-parse --short=12 HEAD):"
+	echo
+	git -C "$src" log --format='  %h %s' "$base..HEAD"
+	echo
+	printf '  %-16s %-8s %7s %9s  %s\n' check verdict errors warnings ''
+	while read -r check verdict errors warnings reason; do
+		printf '  %-16s %-8s %7s %9s  %s\n' "$check" "$verdict" "$errors" "$warnings" "$reason"
+	done <"$results"
+	awk '$2 == "failed" { print $1 }' "$results" | while read -r check; do
+		echo
+		echo '------------------------------------------------------------------------'
+		echo "$check, the last 40 lines of its log:"
+		echo
+		tail --lines=40 "$logs/$check.log"
+	done
+} >"$output/report.txt"
+cat "$output/report.txt"
+echo "wrote $output/report.txt"
+[ "$failed" -eq 0 ]

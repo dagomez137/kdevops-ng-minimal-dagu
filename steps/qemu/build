@@ -2,9 +2,12 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 ## Usage: steps/qemu/build --src SRC --dir DIR --output FILE
 ##
-## Build the x86_64 system emulator of the QEMU tree SRC in DIR/build,
-## install it into DIR/install and append qemu=<binary> to FILE. Run it in
-## the qemu devShell:
+## Build the x86_64 system emulator of the QEMU tree SRC, changes to
+## tracked files included, in DIR/build, install it into DIR/install and
+## append qemu=<binary> to FILE. DIR/build stays for the next build to go on
+## from, and an install whose identity (the tree, this script and the
+## devShell's PATH, which names the toolchain) matches is not built again.
+## Run it in the qemu devShell:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME .#qemu \
 ##       --command steps/qemu/build \
@@ -22,12 +25,33 @@ done
 : "${src:?} ${dir:?} ${output:?}"
 
 set -o xtrace
-rm --recursive --force "$dir"
-meson subprojects download --sourcedir "$src"
-mkdir --parents "$dir/build"
-cd "$dir/build"
-"$src/configure" --target-list=x86_64-softmmu --prefix="$dir/install" \
-	--disable-download
-make --jobs="$(nproc)"
-make install
-echo "qemu=$dir/install/bin/qemu-system-x86_64" >>"$output"
+# The tree as git would commit it now, without touching the real index.
+staging=$(mktemp)
+cp "$(git -C "$src" rev-parse --path-format=absolute --git-path index)" "$staging"
+GIT_INDEX_FILE=$staging git -C "$src" add --update
+tree=$(GIT_INDEX_FILE=$staging git -C "$src" write-tree)
+rm "$staging"
+setup=$(printf '%s\n' "$(sha256sum <"$0")" "$PATH" | sha256sum | cut --characters=1-16)
+identity=$(printf '%s\n' "$tree" "$setup" | sha256sum | cut --characters=1-16)
+qemu=$dir/install/bin/qemu-system-x86_64
+if [ -x "$qemu" ] && [ "$(cat "$dir/install/identity")" = "$identity" ]; then
+	echo "qemu=$qemu" >>"$output"
+	exit 0
+fi
+
+# A build directory configured by another script or toolchain starts over.
+if [ "$(cat "$dir/build/setup" 2>/dev/null)" != "$setup" ]; then
+	rm --recursive --force "$dir"
+	meson subprojects download --sourcedir "$src"
+	mkdir --parents "$dir/build"
+	(
+		cd "$dir/build"
+		"$src/configure" --target-list=x86_64-softmmu --prefix="$dir/install" \
+			--disable-download
+	)
+	echo "$setup" >"$dir/build/setup"
+fi
+make --directory="$dir/build" --jobs="$(nproc)"
+make --directory="$dir/build" install
+echo "$identity" >"$dir/install/identity"
+echo "qemu=$qemu" >>"$output"

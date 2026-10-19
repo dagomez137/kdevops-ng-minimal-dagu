@@ -58,7 +58,7 @@ steps:
     run: >-
       nix develop --ignore-env --keep-env-var HOME .#kernel
       --command steps/kernel/build --src "${params.group}/linux"
-      --config kernel/imageless_defconfig --dir "$STATE/linux"
+      --config kernel/imageless_defconfig --dir "$STATE/linux" --index "$STATE/index"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: kernel

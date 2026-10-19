@@ -1,137 +1,502 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
 # SPDX-License-Identifier: copyleft-next-0.3.1
-## Usage: steps/fstests/report --shares DIRS --sections NAMES --notrun FILE
-##            --output FILE
-##
-## Write one summary per section NAME into FILE and print it, merging what
-## every guest's xfstests share in DIRS that steps/fstests/render configured
-## for it ran: the guests may be shards of one run on this host or on many.
-## A share's results are under the kernel release render wrote to its kver
-## file, in
-## RELEASE/results/NAME: check's xunit report, or the testcases appended to
-## testcases.xml there when check never finished, with steps/fstests/start's
-## last outcome and the tests the guest died in. A section is complete when
-## every share's last outcome is finished with a report and a test ran;
-## failed tests, and skips that the "section test reason" lines of the
-## notrun FILE do not list for NAME, are reported and leave it complete. A
-## test failed when any of its passes did, and did not run when every pass
-## skipped it. A share without a kver file lost its guest before render,
-## and an incomplete summary of its own lists it. Each summary opens with
-## complete: or incomplete:, which steps/fstests/judge reads.
-## kdevops-ng's
-## f/fstests/collect.py and report.py:
-##
-##   nix develop --ignore-env --keep-env-var HOME \
-##       --command steps/fstests/report \
-##       --shares "$(echo ~/.local/state/qemu-system/fstests-*/xfstests)" \
-##       --sections xfs_bs4k_ss4k --notrun guest/xfs.notrun \
-##       --output ~/.local/state/kdevops-ng-minimal-dagu/report.md
-set -o errexit -o nounset -o pipefail
+"""Usage: steps/fstests/report --shares DIRS --sections NAMES --notrun FILE
+           [--baseline FILE|URL] --output DIR
 
-while [ $# -gt 0 ]; do
-	case $1 in
-	--shares | --sections | --notrun | --output) declare "${1#--}=$2" ;;
-	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
-	esac
-	shift 2
-done
-: "${shares:?} ${sections:?} ${notrun?} ${output:?}"
+Merge what every guest's xfstests share in DIRS ran of each section NAME,
+whether the guests were shards of one run, of runs on many hosts or several
+runs of one kernel, and write into DIR:
 
-read -r -a dirs <<<"$shares"
-set -o xtrace
-lost=()
-for share in "${dirs[@]}"; do
-	[ -s "$share/kver" ] || lost+=("$share")
-done
-{
-	if [ "${#lost[@]}" -gt 0 ]; then
-		echo '### fstests guests'
-		echo '```'
-		echo "incomplete: ${#lost[@]} of ${#dirs[@]} guests never got to run a section"
-		printf '  %s\n' "${lost[@]}"
-		echo '```'
-	fi
-	for section in $sections; do
-		files=() problems='' crashes='' guests=0
-		for share in "${dirs[@]}"; do
-			if [ ! -s "$share/kver" ] || [ ! -e "$share/$section.config" ]; then
-				continue
-			fi
-			guests=$((guests + 1))
-			dir=$share/$(<"$share/kver")/results/$section
-			outcome=$(cat "$dir/outcome" 2>/dev/null) || outcome='never started'
-			if [ -s "$dir/result.xml" ]; then
-				files+=("$dir/result.xml")
-			elif [ -s "$dir/testcases.xml" ]; then
-				files+=("$dir/testcases.xml")
-			fi
-			if [ "$outcome" != finished ]; then
-				problems+=$'\n'"  $share: ${outcome//_/ }"
-			elif [ ! -s "$dir/result.xml" ]; then
-				problems+=$'\n'"  $share: check did not finish"
-			fi
-			if [ -s "$dir/crashes" ]; then
-				crashes+=$'\n'$(sed 's/^/  /' "$dir/crashes")
-			fi
-		done
-		# check writes one <testcase> line per test and pass (common/report), its
-		# <failure> or <skipped> on the lines after it.
-		summary=$(awk --assign section="$section" --assign notrun="$notrun" \
-			--assign guests="$guests" --assign problems="$problems" '
-		BEGIN {
-			while (notrun != "" && (getline line <notrun) > 0)
-				if (split(line, f, " ") > 1 && f[1] == section) listed = expected[f[2]] = 1
-		}
-		/<testcase / && match($0, / name="[^"]*"/) {
-			name = substr($0, RSTART + 7, RLENGTH - 8)
-			if (!(name in passes)) order[++n] = name
-			passes[name]++
-		}
-		/<failure/ { failed[name] = 1 }
-		/<skipped/ && match($0, /message="[^"]*"/) {
-			skipped[name]++
-			reason[name] = substr($0, RSTART + 9, RLENGTH - 10)
-		}
-		END {
-			for (i = 1; i <= n; i++) {
-				t = order[i]
-				if (t in failed) { nfail++; fails = fails " " t }
-				else if (skipped[t] == passes[t]) {
-					nskip++
-					if (listed && !(t in expected))
-						unexpected = unexpected sprintf("\n  %s: %s", t, reason[t])
-				} else {
-					npass++
-					if (t in expected) ran = ran " " t
-				}
-			}
-			printf "%s: %d tests on %d guest%s, %d passed, %d failed, %d not run%s\n",
-				!(npass || nfail) || problems != "" ? "incomplete" : "complete",
-				n, guests, guests == 1 ? "" : "s", npass, nfail, nskip, npass || nfail ? "" : ", none ran"
-			if (nfail) print "Failures:" fails
-			if (unexpected != "") print "Not run, not expected to skip:" unexpected
-			if (ran != "") print "Ran, expected to skip:" ran
-			if (problems != "") print "Guests that did not finish:" problems
-		}' "${files[@]:-/dev/null}")
-		if [ -n "$crashes" ]; then
-			summary+=$'\n'"The guest died in:$crashes"
-		fi
-		# Each test at its slowest pass.
-		slowest=$(awk '
-		/<testcase / && match($0, / name="[^"]*"/) {
-			name = substr($0, RSTART + 7, RLENGTH - 8)
-			match($0, /time="[^"]*"/); time = substr($0, RSTART + 6, RLENGTH - 7) + 0
-			if (!(name in slow) || time > slow[name]) slow[name] = time
-		}
-		END { for (name in slow) print slow[name], name }' "${files[@]:-/dev/null}" |
-			sort --numeric-sort --reverse | sed --quiet 1,10p)
-		if [ -n "$slowest" ]; then
-			summary+=$'\n'"Slowest:"$'\n'"$slowest"
-		fi
-		echo "### fstests \`$section\`"
-		echo '```'
-		echo "$summary"
-		echo '```'
-	done
-} >"$output"
-cat "$output"
+  report.txt  a plain-text mail, the Subject: line first: the failing
+              tests, set against the baseline when one is given, each with
+              check's diff, the skips, what ran and how to reproduce it
+              from a clone of the harness
+  outcomes    the run's key=value lines, then one "section test outcome
+              failed/ran" line per test: the baseline of a later run
+  notrun      every skip as "section test reason", the format of FILE
+
+A share's results are under the kernel release render wrote to its kver
+file, in RELEASE/results/NAME: check's xunit report, or the testcases
+appended to testcases.xml when check never finished, steps/fstests/start's
+last outcome and the tests the guest died in. Its run file is what
+steps/fstests/describe recorded of the run. A test failed when every pass
+that ran it failed, is flaky when only some did, and was not run when every
+pass skipped it. Failed tests leave the run complete; it is incomplete,
+status=incomplete in outcomes, when a guest never got to run a section or
+did not finish one, a section ran no test, the shares disagree on what ran,
+or a test was skipped that the "section test reason" lines of FILE do not
+list for its section (any skip passes for a section FILE has no line for).
+steps/fstests/judge reads the status. kdevops-ng's f/fstests/collect.py and
+report.py:
+
+  baseline=https://github.com/dagomez137/kdevops-ng-minimal-dagu/releases/download
+  nix develop --ignore-env --keep-env-var HOME \\
+      --command steps/fstests/report \\
+      --shares "$(echo ~/.local/state/qemu-system/fstests-*/xfstests)" \\
+      --sections xfs_bs4k_ss4k --notrun guest/xfs.notrun \\
+      --baseline "$baseline/baseline-v7.3/outcomes" \\
+      --output ~/.local/state/kdevops-ng-minimal-dagu/report
+"""
+
+import argparse
+import html
+import re
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
+WIDTH = 72
+DIFF_LINES = 40
+LOG_LINES = 20
+
+
+class Test:
+    def __init__(self):
+        self.ran = self.failed = self.skipped = 0
+        self.reason = ""
+        self.detail = None
+        self.dmesg = None
+
+    @property
+    def outcome(self):
+        if not self.ran:
+            return "notrun"
+        if not self.failed:
+            return "pass"
+        return "fail" if self.failed == self.ran else "flaky"
+
+
+class Section:
+    def __init__(self, name):
+        self.name = name
+        self.tests = {}
+        self.guests = 0
+        self.problems = []
+        self.crashes = []
+        self.props = {}
+
+    def count(self, outcome):
+        return sum(test.outcome == outcome for test in self.tests.values())
+
+
+def wrap(text, indent="", hang=None):
+    return textwrap.fill(
+        text,
+        WIDTH,
+        initial_indent=indent,
+        subsequent_indent=indent if hang is None else hang,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+
+
+def read_env(text):
+    env = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and re.fullmatch(r"\w+", key):
+            env[key] = value
+    return env
+
+
+def attr(chunk, name):
+    match = re.search(rf' {name}="([^"]*)"', chunk)
+    return html.unescape(match.group(1)) if match else None
+
+
+def testcases(text):
+    """Yield (name, failed, skip reason or None, detail) for each pass.
+
+    A failure's detail is its message, then each block check wrote for it
+    but the test's full output: the diff in system-err, a mount failure's
+    mount-failure, a kernel log.
+    """
+    for chunk in re.split(r"(?=<testcase )", text)[1:]:
+        chunk = chunk.split("</testcase>")[0]
+        name = attr(chunk, "name")
+        if not name:
+            continue
+        skipped = re.search(r"<skipped[^>]*>", chunk)
+        failure = re.search(r"<failure[^>]*>", chunk)
+        detail = []
+        if failure:
+            detail.append(attr(failure.group(0), "message") or "")
+            for tag, block in re.findall(
+                r"<([\w-]+)>\s*<!\[CDATA\[\n?(.*?)\]\]>\s*</\1>", chunk, re.DOTALL
+            ):
+                if tag != "system-out" and block.strip():
+                    block = block.rstrip("\n").splitlines()
+                    if tag == "system-err":
+                        block = trimmed(block, DIFF_LINES)
+                    elif len(block) > LOG_LINES:
+                        earlier = f"[... {len(block) - LOG_LINES} earlier lines]"
+                        block = [earlier] + block[-LOG_LINES:]
+                    detail += ["", f"{tag}:"] + block
+        yield (
+            name,
+            failure is not None,
+            (attr(skipped.group(0), "message") or "") if skipped else None,
+            detail,
+        )
+
+
+def merge(shares, name):
+    section = Section(name)
+    for share in shares:
+        kver = share / "kver"
+        if not kver.is_file() or not (share / f"{name}.config").exists():
+            continue
+        section.guests += 1
+        results = share / kver.read_text().strip() / "results" / name
+        outcome = results / "outcome"
+        outcome = outcome.read_text().strip() if outcome.is_file() else "never started"
+        report = results / "result.xml"
+        if not (report.is_file() and report.stat().st_size):
+            report = results / "testcases.xml"
+        if outcome != "finished":
+            section.problems.append(f"{share}: {outcome.replace('_', ' ')}")
+        elif report.name != "result.xml":
+            section.problems.append(f"{share}: check did not finish")
+        if (results / "crashes").is_file():
+            section.crashes += (results / "crashes").read_text().split()
+        if not report.is_file():
+            continue
+        text = report.read_text(errors="replace")
+        if not section.props:
+            section.props = {
+                html.unescape(k): html.unescape(v)
+                for k, v in re.findall(
+                    r'<property name="([^"]*)" value="([^"]*)"', text
+                )
+            }
+        for test_name, failed, reason, detail in testcases(text):
+            test = section.tests.setdefault(test_name, Test())
+            if reason is not None:
+                test.skipped += 1
+                test.reason = reason
+                continue
+            test.ran += 1
+            if failed:
+                test.failed += 1
+                if test.detail is None:
+                    test.detail = detail
+                    dmesg = results / f"{test_name}.dmesg"
+                    test.dmesg = dmesg if dmesg.is_file() else None
+    return section
+
+
+def load_baseline(where):
+    if not where:
+        return {}, None
+    if re.match(r"https?://", where):
+        text = subprocess.run(
+            ["curl", "--fail", "--silent", "--show-error", "--location", where],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    else:
+        text = Path(where).read_text()
+    outcomes = {}
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and "=" not in fields[0]:
+            outcomes[fields[0], fields[1]] = fields[2]
+    return read_env(text), outcomes
+
+
+def plural(count, noun):
+    return f"{count} {noun}{'' if count == 1 else 's'}"
+
+
+def short(commit):
+    return commit[:12] if commit else "unknown"
+
+
+def trimmed(lines, limit):
+    if len(lines) <= limit:
+        return lines
+    return lines[:limit] + [f"[... {len(lines) - limit} more lines]"]
+
+
+def listing(title, items):
+    if not items:
+        return []
+    return ["", wrap(title), ""] + items
+
+
+def failing_lines(entries):
+    """One line per test: the test, then each section it failed in."""
+    lines = []
+    for test_name, where in sorted(entries.items()):
+        parts = []
+        for section, test in where:
+            parts.append(
+                section
+                if test.outcome == "fail"
+                else f"{section} (failed {test.failed} of {test.ran})"
+            )
+        lines.append(wrap(", ".join(parts), f"  {test_name:<16}", " " * 18))
+    return lines
+
+
+def reproduce(run, sections, failing):
+    lines = [
+        f"  git clone {run.get('harness_url', '<harness>')}",
+        "  cd kdevops-ng-minimal-dagu",
+        f"  git checkout {run.get('harness_commit', 'HEAD')}",
+    ]
+    params = [
+        f"{key}={run[key]}"
+        for key in ("kernel_url", "kernel_ref", "qemu_url", "qemu_ref")
+        if run.get(key)
+    ]
+    by_section = {}
+    for test_name, where in failing.items():
+        for section, _ in where:
+            by_section.setdefault(section, []).append(test_name)
+    runs = [
+        [f"sections={section}", f"'tests={' '.join(sorted(tests))}'", "groups="]
+        for section, tests in sorted(by_section.items())
+    ]
+    if not runs:
+        selection = (
+            f"groups={run['groups']}"
+            if run.get("groups")
+            else f"'tests={run.get('tests', '')}'"
+        )
+        runs = [[f"'sections={' '.join(sections)}'", selection]]
+    for args in runs:
+        lines += [
+            "  nix develop --ignore-env --keep-env-var HOME \\",
+            "      --keep-env-var XDG_RUNTIME_DIR \\",
+            "      --command dagu --config config.yaml start fstests -- \\",
+        ]
+        words = params + args
+        lines += [f"      {word} \\" for word in words[:-1]] + [f"      {words[-1]}"]
+    return lines
+
+
+def main():
+    parser = argparse.ArgumentParser(add_help=False)
+    for option in ("shares", "sections", "notrun", "output"):
+        parser.add_argument(f"--{option}", required=True)
+    parser.add_argument("--baseline", default="")
+    args, rest = parser.parse_known_args()
+    if rest:
+        sys.exit(__doc__)
+    shares = [Path(share) for share in args.shares.split()]
+    output = Path(args.output)
+    output.mkdir(parents=True, exist_ok=True)
+
+    expected = {}
+    if args.notrun:
+        for line in Path(args.notrun).read_text().splitlines():
+            fields = line.split(maxsplit=2)
+            if len(fields) > 1 and not line.startswith("#"):
+                expected.setdefault(fields[0], set()).add(fields[1])
+
+    incomplete = []
+    lost = [share for share in shares if not (share / "kver").is_file()]
+    if lost:
+        incomplete.append(
+            f"{len(lost)} of {len(shares)} guests never got to run a section:"
+        )
+        incomplete += [f"  {share}" for share in lost]
+    envs = [read_env((s / "run").read_text()) for s in shares if (s / "run").is_file()]
+    run = envs[0] if envs else {}
+    for key in ("kernel_commit", "harness_commit", "fstests", "xfsprogs"):
+        values = sorted({env.get(key, "") for env in envs})
+        if len(values) > 1:
+            incomplete.append(f"The guests ran different {key}: {', '.join(values)}")
+    base_run, base = load_baseline(args.baseline)
+
+    sections = [merge(shares, name) for name in args.sections.split()]
+    props = next((s.props for s in sections if s.props), {})
+    regressions, known, new, failing = {}, {}, {}, {}
+    fixed, unexpected, ran_expected, skips, crashes = [], [], [], [], []
+    for section in sections:
+        if not any(t.outcome != "notrun" for t in section.tests.values()):
+            incomplete.append(f"{section.name}: no test ran")
+        incomplete += [f"{section.name}: {problem}" for problem in section.problems]
+        crashes += [f"  {section.name} {name}" for name in section.crashes]
+        listed = expected.get(section.name)
+        for name, test in section.tests.items():
+            outcome = test.outcome
+            was = base.get((section.name, name)) if base is not None else None
+            if outcome in ("fail", "flaky"):
+                failing.setdefault(name, []).append((section.name, test))
+                if base is not None:
+                    group = {"pass": regressions, "fail": known, "flaky": known}
+                    group.get(was, new).setdefault(name, []).append(
+                        (section.name, test)
+                    )
+            elif outcome == "pass" and was in ("fail", "flaky"):
+                fixed.append(f"  {name:<16}{section.name}")
+            if outcome == "notrun":
+                skips.append(f"{section.name} {name} {test.reason}")
+                if listed is not None and name not in listed:
+                    unexpected.append(
+                        wrap(test.reason, f"  {section.name} {name}: ", "      ")
+                    )
+            elif listed is not None and name in listed:
+                ran_expected.append(f"  {section.name} {name}")
+    if unexpected:
+        incomplete.append(
+            f"{len(unexpected)} tests skipped that {args.notrun} does not expect"
+        )
+
+    fstyp = props.get("FSTYP", "fstests")
+    kernel_ref = run.get("kernel_ref", props.get("KERNEL", "unknown kernel"))
+    subject = f"[fstests] {kernel_ref} {fstyp}: "
+    subject += "incomplete, " if incomplete else ""
+    subject += plural(len(failing), "failing test")
+    if base is not None:
+        subject += ", " + plural(len(regressions), "regression")
+
+    against = ""
+    if base is not None:
+        against = (
+            f" Each test is set against the baseline of"
+            f" {base_run.get('kernel_ref', args.baseline)}"
+            f" ({short(base_run.get('kernel_commit'))}), {args.baseline}."
+        )
+    lines = [
+        f"Subject: {subject}",
+        "",
+        wrap(
+            f"fstests ran {plural(sum(len(s.tests) for s in sections), 'test')} in"
+            f" {plural(len(sections), fstyp + ' section')} on {kernel_ref}"
+            f" ({short(run.get('kernel_commit'))}), on {plural(len(shares), 'guest')}."
+            + against
+        ),
+        "",
+    ]
+    width = max(len(s.name) for s in sections) + 2
+    lines.append(
+        f"  {'':<{width}}{'tests':>7}{'pass':>7}{'fail':>7}{'flaky':>7}{'not run':>9}"
+    )
+    for s in sections:
+        lines.append(
+            f"  {s.name:<{width}}{len(s.tests):>7}{s.count('pass'):>7}"
+            f"{s.count('fail'):>7}{s.count('flaky'):>7}{s.count('notrun'):>9}"
+        )
+
+    if incomplete:
+        lines += listing("The run is incomplete:", [f"  {line}" for line in incomplete])
+    if base is not None:
+        lines += ["", "Regressions, passed in the baseline:", ""]
+        lines += failing_lines(regressions) or ["  none"]
+        lines += listing("New failures, not run in the baseline:", failing_lines(new))
+        lines += listing(
+            "Known failures, failing in the baseline too:", failing_lines(known)
+        )
+        lines += listing("Fixed, failing in the baseline:", fixed)
+    else:
+        lines += ["", "Failures:", ""]
+        lines += failing_lines(failing) or ["  none"]
+    lines += listing("The guest died in:", crashes)
+    lines += listing(f"Skipped, not expected by {args.notrun}:", unexpected)
+    lines += listing(f"Ran, expected to skip by {args.notrun}:", ran_expected)
+    if skips and not unexpected:
+        lines += [
+            "",
+            wrap(
+                f"The {len(skips)} skipped tests are the ones {args.notrun}"
+                " expects; outcomes and notrun next to this report list them."
+            ),
+        ]
+
+    shown = set()
+    for group in (regressions, new, known) if base is not None else (failing,):
+        for name, where in sorted(group.items()):
+            if name in shown:
+                continue
+            shown.add(name)
+            section, test = where[0]
+            lines += ["", "-" * WIDTH, f"{name}, {section}", ""]
+            lines += test.detail
+            if test.dmesg:
+                dmesg = test.dmesg.read_text(errors="replace").splitlines()
+                lines += ["", f"{test.dmesg.name}:"] + dmesg[-LOG_LINES:]
+    if failing:
+        lines += ["", "-" * WIDTH]
+
+    lines += ["", "What ran:", ""]
+    drives = int(props.get("TEST_DEV_SIZE_KB", 0)) // 1048576
+    facts = [
+        (
+            "kernel",
+            f"{run.get('kernel_url', '?')} {kernel_ref} {run.get('kernel_commit', '')}",
+        ),
+        ("build", run.get("kernel", "")),
+        ("fstests", f"{run.get('fstests', '?')}, {run.get('xfsprogs', '?')}"),
+        (
+            "check",
+            f"-g {run['groups']}" if run.get("groups") else run.get("tests", ""),
+        ),
+        ("QEMU", f"{run.get('qemu_url', '?')} {run.get('qemu_ref', '')}"),
+        (
+            "guests",
+            f"{len(shares)}, {run.get('cpus', '?')} CPUs and {run.get('ram', '?')} MiB"
+            f" each, {drives} GiB NVMe drives",
+        ),
+        (
+            "harness",
+            f"{run.get('harness_url', '?')} {run.get('harness_commit', '')}"
+            + (
+                " with uncommitted changes"
+                if run.get("harness_dirty") == "true"
+                else ""
+            ),
+        ),
+    ]
+    if base is not None:
+        facts.append(
+            (
+                "baseline",
+                " ".join(
+                    (
+                        base_run.get("kernel_ref", "?"),
+                        base_run.get("kernel_commit", "") + ",",
+                        "harness",
+                        short(base_run.get("harness_commit")),
+                    )
+                ),
+            )
+        )
+    for key, value in facts:
+        lines.append(wrap(value, f"  {key:<10}", " " * 12))
+
+    lines += ["", "Reproduce:", ""]
+    lines += reproduce(run, args.sections.split(), failing)
+    lines += [
+        "",
+        wrap(
+            "The host needs /dev/kvm, /dev/vhost-vsock and a systemd --user"
+            " manager, as the README's Run section says. The results land in"
+            " ~/.local/state/qemu-system/fstests-1/xfstests/<release>/results;"
+            " vms=N splits the tests among N guests."
+        ),
+    ]
+    text = "\n".join(lines) + "\n"
+    (output / "report.txt").write_text(text)
+
+    with (output / "outcomes").open("w") as out:
+        out.write(f"status={'incomplete' if incomplete else 'complete'}\n")
+        for key, value in run.items():
+            out.write(f"{key}={value}\n")
+        for s in sections:
+            for name, test in sorted(s.tests.items()):
+                out.write(f"{s.name} {name} {test.outcome} {test.failed}/{test.ran}\n")
+    (output / "notrun").write_text(
+        f'# Tests check skipped, as "section test reason", on {kernel_ref}'
+        f" ({short(run.get('kernel_commit'))}).\n"
+        + "".join(f"{line}\n" for line in sorted(skips))
+    )
+    sys.stdout.write(text)
+
+
+if __name__ == "__main__":
+    main()

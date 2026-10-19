@@ -81,7 +81,12 @@ jobs:
 
       - name: Publish the report
         if: always()
-        run: cat ~/.local/state/kdevops-ng-minimal-dagu/report.md >>"$GITHUB_STEP_SUMMARY"
+        run: |
+          {
+            echo '```'
+            cat ~/.local/state/kdevops-ng-minimal-dagu/report/report.txt
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -89,6 +94,6 @@ jobs:
           name: sizing-${{ matrix.vms }}x${{ matrix.cpus }}c${{ matrix.ram }}m
           path: |
             ~/.local/state/kdevops-ng-minimal-dagu/dagu/logs
-            ~/.local/state/kdevops-ng-minimal-dagu/report.md
+            ~/.local/state/kdevops-ng-minimal-dagu/report
             ~/.local/state/qemu-system/fstests-*/xfstests
           if-no-files-found: ignore

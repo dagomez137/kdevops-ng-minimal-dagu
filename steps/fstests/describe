@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/describe --build FILE --shares DIRS --cpus N --ram MIB
+##            --groups GROUPS --tests TESTS
+##
+## Write the file run into each xfstests share in DIRS: what
+## steps/fstests/report needs to say what ran and how to run it again.
+## That is the build manifest FILE (the kernel's URL, ref, commit and store
+## path, QEMU's URL and ref), the xfstests and xfsprogs of the guest's
+## closure, the guests' N CPUs and MIB MiB, the GROUPS or TESTS check runs
+## and this checkout's URL and commit:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/describe \
+##       --build ~/.local/state/kdevops-ng-minimal-dagu/build.env \
+##       --shares "$(echo ~/.local/state/qemu-system/fstests-*/xfstests)" \
+##       --cpus 4 --ram 4096 --groups auto --tests ''
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--build | --shares | --cpus | --ram | --groups | --tests) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${build:?} ${shares:?} ${cpus:?} ${ram:?} ${groups?} ${tests?}"
+
+read -r -a dirs <<<"$shares"
+set -o xtrace
+init=$(sed --quiet 's/^init=//p' "$build")
+closure=$(nix path-info --recursive "$(dirname "$init")")
+dirty=false
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+	dirty=true
+fi
+for share in "${dirs[@]}"; do
+	mkdir --parents "$share"
+	{
+		grep --extended-regexp '^(kernel|kernel_url|kernel_ref|kernel_commit|qemu_url|qemu_ref)=' "$build"
+		grep --only-matching --max-count=1 'xfstests-[0-9][^/-]*$' <<<"$closure" |
+			sed 's/^/fstests=/'
+		grep --only-matching --max-count=1 'xfsprogs-[0-9][^/-]*$' <<<"$closure" |
+			sed 's/^/xfsprogs=/'
+		echo "cpus=$cpus"
+		echo "ram=$ram"
+		echo "groups=$groups"
+		echo "tests=$tests"
+		echo "harness_url=$(git remote get-url origin)"
+		echo "harness_commit=$(git rev-parse HEAD)"
+		echo "harness_dirty=$dirty"
+	} >"$share/run"
+done
+cat "${dirs[0]}/run"

@@ -48,6 +48,7 @@
           inherit env shellHook;
           packages = [
             dagu
+            pkgs.curl
             pkgs.git
             pkgs.git-subrepo
             pkgs.jq
@@ -55,6 +56,7 @@
             pkgs.nix
             pkgs.openssh
             pkgs.procps
+            pkgs.python3
             pkgs.systemd
             pkgs.util-linux
             pkgs.zstd
@@ -94,6 +96,7 @@
           inherit env shellHook;
           inputsFrom = [ pkgs.qemu ];
           packages = [
+            pkgs.curl
             pkgs.git
             (pkgs.python3.withPackages (ps: [
               ps.setuptools

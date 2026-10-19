@@ -53,10 +53,14 @@ params:
   - name: test_timeout
     type: integer
     default: 600
-  # The skips a section expects, for kernel v7.2.11; a section listed there
-  # fails when it skips anything else. Empty accepts every skip.
+  # The skips a section expects; a section listed there is incomplete when
+  # it skips anything else. Empty accepts every skip.
   - name: notrun
     default: guest/xfs.notrun
+  # The outcomes file, or its URL, of an earlier run to set this one
+  # against, such as a release's baseline-<kernel_ref>; empty sets none.
+  - name: baseline
+    default: ""
 
 env:
   # Dagu hands steps a filtered environment; systemctl --user needs this.
@@ -140,11 +144,19 @@ steps:
         type: json
       - name: shares
 
+  - id: describe
+    depends: [inputs, plan]
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/describe --build "$STATE/build.env"
+      --shares "${steps.plan.outputs.shares}" --cpus ${params.cpus} --ram ${params.ram}
+      --groups "${params.groups}" --tests "${params.tests}"
+
   # One run of the guest DAG below per guest, side by side; a failed guest
   # does not stop the others, and judge fails the run when one did not
   # finish.
   - id: guests
-    depends: [inputs, key, plan, root]
+    depends: [describe, key, root]
     action: dag.run
     with:
       dag: guest
@@ -172,20 +184,20 @@ steps:
       items: ${steps.plan.outputs.guests}
     continue_on: failed
 
-  # One summary per section, whichever guests ran its tests.
+  # One report of every section, whichever guests ran its tests.
   - id: report
     depends: guests
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/report --shares "${steps.plan.outputs.shares}"
       --sections "${params.sections}" --notrun "${params.notrun}"
-      --output "$STATE/report.md"
+      --baseline "${params.baseline}" --output "$STATE/report"
 
   - id: judge
     depends: report
     run: >-
       nix develop --ignore-env --keep-env-var HOME
-      --command steps/fstests/judge --report "$STATE/report.md"
+      --command steps/fstests/judge --outcomes "$STATE/report/outcomes"
 
 # Show what the host looks like after the run.
 handler_on:
@@ -395,14 +407,14 @@ steps:
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/report --shares ${params.share}
       --sections ${params.section} --notrun "${params.notrun}"
-      --output "${params.share}/${params.kver}/results/${params.section}/report.md"
+      --output "${params.share}/${params.kver}/results/${params.section}"
 
   - id: judge
     depends: report
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/judge
-      --report "${params.share}/${params.kver}/results/${params.section}/report.md"
+      --outcomes "${params.share}/${params.kver}/results/${params.section}/outcomes"
 
 ---
 name: attempt

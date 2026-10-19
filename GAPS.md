@@ -63,8 +63,8 @@ with `continue_on: failed`, which lets the report run after a failed
 section, ends the DAG `partially_succeeded`, and so does a `dag.run` step
 with `parallel:` once a child has failed, after it has run every item.
 `dagu start` exits 1 on both, but Dagu runs `handler_on.success` on that
-status as on a success. The `judge` step makes `report.md` and the exit
-status say the same thing.
+status as on a success. The `judge` step makes the report's status and
+the exit status say the same thing.
 
 **A section's log is two levels down.** `dagu status` shows the `guests`
 step as `subdag: <id>` lines, and each guest its `sections` step the same

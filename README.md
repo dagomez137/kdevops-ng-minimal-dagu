@@ -55,7 +55,7 @@ and a `systemd --user` manager; the root step of
 `.github/workflows/fstests.yaml` sets them up on a fresh Ubuntu 24.04
 runner and is the list of what a host's owner does by hand. Run logs, the
 kernel, QEMU and the closure GC roots go under
-`~/.local/state/kdevops-ng-minimal-dagu`, the run's `report.md` included;
+`~/.local/state/kdevops-ng-minimal-dagu`, the run's `report` included;
 each guest's state (NVMe drives, the fstests share with the results) under
 `~/.local/state/qemu-system/fstests-<n>`; its units under
 `~/.config/systemd`.
@@ -82,6 +82,7 @@ takes every input as a long option, prints each command it runs
 | `steps/nix/import` | `.#default` | the exported store paths realised, QEMU and `build.env` in place |
 | `steps/ssh/key` | `.#default` | `key`: the private key that reaches the guest |
 | `steps/fstests/plan` | `.#default` | `guests`, `shares`: each guest's name and shard, and its xfstests share |
+| `steps/fstests/describe` | `.#default` | `run` on each share: the kernel, fstests, guests and harness commit the report names |
 | `steps/qsu/render` | `.#default` | `cid`; the `qemu-system@fstests-<n>.service` units |
 | `steps/qsu/boot` | `.#default` | the guest up and answering over SSH |
 | `steps/fstests/shard` | `.#default` | `groups`, `tests`: with a shard I/N, the tests in N shards of equal time |
@@ -90,8 +91,8 @@ takes every input as a long option, prints each command it runs
 | `steps/fstests/wipe` | `.#default` | the disks emptied, per section |
 | `steps/fstests/prepare` | `.#default` | the mount points, per section |
 | `steps/fstests/start` | `.#default` | `outcome`: `xfstests@<section>.service` run to its end, stopped at the deadline, or the guest died and the section's exclude list is written |
-| `steps/fstests/report` | `.#default` | `report.md`: one summary per section, merged from every guest that ran it; per section on its share, per run in the state directory, per workflow in CI's report job |
-| `steps/fstests/judge` | `.#default` | fails unless every guest ran every section to the end |
+| `steps/fstests/report` | `.#default` | `report.txt`, a plain-text mail of the failures, set against a baseline, with how to reproduce them; `outcomes`, every test's outcome; `notrun`, every skip. Merged from every guest that ran a section: per section on its share, per run in the state directory, per workflow in CI's report job |
+| `steps/fstests/judge` | `.#default` | fails unless every guest ran every section to the end and skipped only what `notrun` expects |
 | `steps/qsu/console` | `.#default` | `console.log` on the share, the VM's console from the journal |
 
 `steps/qsu/ssh` is the one SSH command line the guest steps share; it gives

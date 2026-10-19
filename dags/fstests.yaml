@@ -103,7 +103,9 @@ steps:
 
   - id: inputs
     depends: [build, import]
-    run: cat "$STATE/build.env" >>"$DAGU_OUTPUT_FILE"
+    run: >-
+      grep --extended-regexp '^(kernel|qemu|init|initrd|virtiofsd)=' "$STATE/build.env"
+      >>"$DAGU_OUTPUT_FILE"
     outputs:
       - name: kernel
       - name: qemu

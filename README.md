@@ -34,8 +34,17 @@ nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
 ```
 
 Without a repository, a tree is a one-commit clone of its URL. A tree
-already in the group moves to the new commit, and one with changes to
-tracked files stops the run instead of losing them.
+already in the group moves to the new commit; one with changes to tracked
+files is built as it stands when it is already there, its reports filed
+under `<kernel>-dirty`, and otherwise stops the run instead of losing them.
+`fstests_ref` (with `fstests_url` and `fstests_repo`) adds an fstests tree
+to the group, `xfstests`, which the guest's closure is built from in place
+of its pinned fstests.
+
+So to chase a failure, edit the trees in the group, debug traces and all,
+and run the same command again: the kernel and QEMU are rebuilt only when
+their tree, configuration, build script or toolchain changed, from where
+the last build left off, and Nix rebuilds fstests only when its tree did.
 
 `groups` and `tests` exclude each other; `iterations` and `loop_on_fail`
 are check's `-I` and `-L`, `stop_on_fail=false` turns `-I` into `-i`, and

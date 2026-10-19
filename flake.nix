@@ -7,6 +7,13 @@
     nixpkgs.follows = "nixos-flake/nixpkgs";
     # Dagu 2.20 needs Go 1.27, which only unstable has.
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # The guest's fstests source when steps/nix/closure overrides it with a
+    # git tree; this default, the snapshot the vendored overlay pins, leaves
+    # the vendored package as it is.
+    xfstests-src = {
+      url = "https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git/snapshot/xfstests-dev-v2026.10.15.tar.gz";
+      flake = false;
+    };
   };
 
   outputs =
@@ -15,6 +22,7 @@
       nixpkgs,
       nixpkgs-unstable,
       nixos-flake,
+      xfstests-src,
     }:
     let
       system = "x86_64-linux";
@@ -113,7 +121,32 @@
           nixos-flake.nixosModules.backends.imageless
           nixos-flake.nixosModules.mounts.shares
           nixos-flake.nixosModules.testSuites.fstests
-          { nixpkgs.overlays = [ nixos-flake.overlays.default ]; }
+          {
+            nixpkgs.overlays = [
+              nixos-flake.overlays.default
+              # A tree's commit goes in the version, so the closure, the guest
+              # and the report name what was built; a dirty tree's says so.
+              (
+                final: prev:
+                let
+                  rev = xfstests-src.shortRev or xfstests-src.dirtyShortRev or null;
+                in
+                nixpkgs.lib.optionalAttrs (rev != null) {
+                  xfstests = prev.xfstests.overrideAttrs (
+                    old:
+                    let
+                      version = "${old.version}+git${builtins.replaceStrings [ "-" ] [ "." ] rev}";
+                    in
+                    {
+                      src = xfstests-src;
+                      inherit version;
+                      name = "xfstests-${version}";
+                    }
+                  );
+                }
+              )
+            ];
+          }
           ./guest/fstests.nix
         ];
       };

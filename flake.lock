@@ -53,7 +53,21 @@
           "nixos-flake",
           "nixpkgs"
         ],
-        "nixpkgs-unstable": "nixpkgs-unstable"
+        "nixpkgs-unstable": "nixpkgs-unstable",
+        "xfstests-src": "xfstests-src"
+      }
+    },
+    "xfstests-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792013756,
+        "narHash": "sha256-+AGZhmBLz5nATD8KMn8SHgiWkJ2FbQFL3v2McRvijvk=",
+        "type": "tarball",
+        "url": "https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git/snapshot/xfstests-dev-v2026.10.15.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git/snapshot/xfstests-dev-v2026.10.15.tar.gz"
       }
     }
   },

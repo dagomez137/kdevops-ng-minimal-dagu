@@ -25,6 +25,15 @@ params:
     default: ""
   - name: qemu_repo
     default: ""
+  # fstests from a tree in group, as xfstests: the ref of fstests_url, in
+  # fstests_repo when given, as for Linux and QEMU. Empty keeps the closure's
+  # pinned fstests.
+  - name: fstests_url
+    default: https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git
+  - name: fstests_ref
+    default: ""
+  - name: fstests_repo
+    default: ""
   # Where steps/nix/export writes; empty exports nothing.
   - name: export
     default: ""
@@ -33,7 +42,12 @@ env:
   - STATE: ${HOME}/.local/state/kdevops-ng-minimal-dagu
 
 steps:
+  # A manifest the run did not write would boot what an earlier run built.
+  - id: forget
+    run: rm --force "$STATE/build.env"
+
   - id: host
+    depends: forget
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/host/check --output "$DAGU_OUTPUT_FILE"
@@ -85,12 +99,31 @@ steps:
     outputs:
       - name: qemu
 
-  - id: closure
+  - id: fstests_src
     depends: host
     run: >-
       nix develop --ignore-env --keep-env-var HOME
-      --command steps/nix/closure --flake . --dir "$STATE/closure"
+      --command steps/git/checkout
+      --url ${params.fstests_url} --ref "${params.fstests_ref}"
+      --repo "${params.fstests_repo}" --dir "${params.group}/xfstests"
       --output "$DAGU_OUTPUT_FILE"
+    preconditions:
+      - condition: "${params.fstests_ref}"
+        expected: "re:.+"
+    continue_on:
+      skipped: true
+    outputs:
+      - name: commit
+      - name: dirty
+      - name: name
+
+  - id: closure
+    depends: fstests_src
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/nix/closure --flake .
+      --fstests "$(test -z '${params.fstests_ref}' || echo '${params.group}/xfstests')"
+      --dir "$STATE/closure" --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: init
       - name: initrd

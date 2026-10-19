@@ -25,6 +25,15 @@ params:
     default: ""
   - name: qemu_repo
     default: ""
+  # fstests from a tree in group, as xfstests: the ref of fstests_url, in
+  # fstests_repo when given, as for Linux and QEMU. Empty keeps the closure's
+  # pinned fstests.
+  - name: fstests_url
+    default: https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git
+  - name: fstests_ref
+    default: ""
+  - name: fstests_repo
+    default: ""
   # Sections of guest/xfs.config, run one after the other.
   - name: sections
     default: xfs_bs4k_ss4k
@@ -102,6 +111,9 @@ steps:
         group: ${params.group}
         kernel_repo: ${params.kernel_repo}
         qemu_repo: ${params.qemu_repo}
+        fstests_url: ${params.fstests_url}
+        fstests_ref: ${params.fstests_ref}
+        fstests_repo: ${params.fstests_repo}
     preconditions:
       - condition: "${params.prebuilt}"
         expected: "re:^$"

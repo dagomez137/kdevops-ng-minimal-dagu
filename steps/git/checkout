@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/git/checkout --url URL --ref REF --repo REPO --dir DIR --output FILE
+##
+## Check REF out at DIR, detached, and append commit=<the commit> to FILE.
+## Given REPO (a clone, bare or not, or one of its worktrees), DIR is a
+## worktree of it and REF is what REPO calls it, fetched from URL only when
+## REPO lacks it, so nothing but what REPO lacks is downloaded and REPO's
+## refs are left alone. With REPO empty, DIR is a one-commit clone of URL.
+## A DIR already there moves to the commit; one with changes to tracked
+## files is refused, never discarded:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/git/checkout \
+##       --url https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git \
+##       --ref v7.3 --repo ~/src/linux --dir ~/src/reproducer-generic-127/linux \
+##       --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--url | --ref | --repo | --dir | --output) declare "${1#--}=$2" ;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${url:?} ${ref:?} ${repo?} ${dir:?} ${output:?}"
+
+set -o xtrace
+if [ -e "$dir" ] && [ -n "$(git -C "$dir" status --porcelain --untracked-files=no)" ]; then
+	echo "$dir has changes to tracked files; commit them or move them away" >&2
+	exit 1
+fi
+if [ -n "$repo" ]; then
+	if ! commit=$(git -C "$repo" rev-parse --verify --quiet "$ref^{commit}"); then
+		git -C "$repo" fetch --no-tags "$url" "$ref"
+		commit=$(git -C "$repo" rev-parse --verify "FETCH_HEAD^{commit}")
+	fi
+	if [ -e "$dir" ]; then
+		git -C "$dir" checkout --detach "$commit"
+	else
+		mkdir --parents "$(dirname "$dir")"
+		git -C "$repo" worktree add --detach "$dir" "$commit"
+	fi
+else
+	if [ -e "$dir" ]; then
+		git -C "$dir" fetch --depth 1 "$url" "$ref"
+		git -C "$dir" checkout --detach FETCH_HEAD
+	else
+		git clone --depth 1 --branch "$ref" "$url" "$dir"
+	fi
+	commit=$(git -C "$dir" rev-parse HEAD)
+fi
+echo "commit=$commit" >>"$output"

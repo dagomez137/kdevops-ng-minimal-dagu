@@ -20,15 +20,22 @@ nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
     --command dagu --config config.yaml status fstests
 ```
 
-Clone from local mirrors instead of git.kernel.org and GitLab, and run two
-sections of `guest/xfs.config` with fstests' quick group twice over:
+Check the trees out as worktrees of your own Linux and QEMU repositories,
+in a worktree group of their own, so only what those lack is downloaded,
+and run two sections of `guest/xfs.config` with fstests' quick group
+twice over:
 
 ```sh
 nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
     --command dagu --config config.yaml start fstests -- \
-    kernel_url=file://$HOME/mirror/linux.git qemu_url=file://$HOME/mirror/qemu.git \
+    group=$HOME/src/reproducer-generic-127 \
+    kernel_repo=$HOME/src/linux qemu_repo=$HOME/src/qemu \
     'sections=xfs_bs4k_ss4k xfs_noreflink_bs4k_ss4k' groups=quick tests= iterations=2
 ```
+
+Without a repository, a tree is a one-commit clone of its URL. A tree
+already in the group moves to the new commit, and one with changes to
+tracked files stops the run instead of losing them.
 
 `groups` and `tests` exclude each other; `iterations` and `loop_on_fail`
 are check's `-I` and `-L`, `stop_on_fail=false` turns `-I` into `-i`, and

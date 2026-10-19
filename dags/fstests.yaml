@@ -14,6 +14,17 @@ params:
     default: https://gitlab.com/qemu-project/qemu.git
   - name: qemu_ref
     default: v11.1.2
+  # The worktree group: the directory the Linux and QEMU trees are checked
+  # out in, as linux and qemu.
+  - name: group
+    default: $HOME/.local/state/kdevops-ng-minimal-dagu/src
+  # Your own Linux and QEMU repositories (a clone, bare or not, or a
+  # worktree of one): the trees in group become worktrees of them, and the
+  # refs resolve there first. Empty clones one commit from the URL.
+  - name: kernel_repo
+    default: ""
+  - name: qemu_repo
+    default: ""
   # Sections of guest/xfs.config, run one after the other.
   - name: sections
     default: xfs_bs4k_ss4k
@@ -88,6 +99,9 @@ steps:
         kernel_ref: ${params.kernel_ref}
         qemu_url: ${params.qemu_url}
         qemu_ref: ${params.qemu_ref}
+        group: ${params.group}
+        kernel_repo: ${params.kernel_repo}
+        qemu_repo: ${params.qemu_repo}
     preconditions:
       - condition: "${params.prebuilt}"
         expected: "re:^$"

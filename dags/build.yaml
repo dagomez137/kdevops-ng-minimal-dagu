@@ -14,6 +14,17 @@ params:
     default: https://gitlab.com/qemu-project/qemu.git
   - name: qemu_ref
     default: v11.1.2
+  # The worktree group: the directory the Linux and QEMU trees are checked
+  # out in, as linux and qemu.
+  - name: group
+    default: $HOME/.local/state/kdevops-ng-minimal-dagu/src
+  # Your own Linux and QEMU repositories (a clone, bare or not, or a
+  # worktree of one): the trees in group become worktrees of them, and the
+  # refs resolve there first. Empty clones one commit from the URL.
+  - name: kernel_repo
+    default: ""
+  - name: qemu_repo
+    default: ""
   # Where steps/nix/export writes; empty exports nothing.
   - name: export
     default: ""
@@ -29,24 +40,43 @@ steps:
     outputs:
       - name: cpus
 
-  - id: kernel
+  - id: kernel_src
     depends: host
     run: >-
-      nix develop --ignore-env --keep-env-var HOME .#kernel
-      --command steps/kernel/build
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/git/checkout
       --url ${params.kernel_url} --ref ${params.kernel_ref}
+      --repo "${params.kernel_repo}" --dir "${params.group}/linux"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: commit
+
+  - id: kernel
+    depends: kernel_src
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME .#kernel
+      --command steps/kernel/build --src "${params.group}/linux"
       --config kernel/imageless_defconfig --dir "$STATE/linux"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: kernel
+
+  - id: qemu_src
+    depends: host
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/git/checkout
+      --url ${params.qemu_url} --ref ${params.qemu_ref}
+      --repo "${params.qemu_repo}" --dir "${params.group}/qemu"
+      --output "$DAGU_OUTPUT_FILE"
+    outputs:
       - name: commit
 
   - id: qemu
-    depends: host
+    depends: qemu_src
     run: >-
       nix develop --ignore-env --keep-env-var HOME .#qemu
-      --command steps/qemu/build
-      --url ${params.qemu_url} --ref ${params.qemu_ref} --dir "$STATE/qemu"
+      --command steps/qemu/build --src "${params.group}/qemu" --dir "$STATE/qemu"
       --output "$DAGU_OUTPUT_FILE"
     outputs:
       - name: qemu
@@ -72,7 +102,7 @@ steps:
     run: >-
       printf '%s\n' kernel=${steps.kernel.outputs.kernel} qemu=${steps.qemu.outputs.qemu}
       kernel_url=${params.kernel_url} kernel_ref=${params.kernel_ref}
-      kernel_commit=${steps.kernel.outputs.commit}
+      kernel_commit=${steps.kernel_src.outputs.commit}
       qemu_url=${params.qemu_url} qemu_ref=${params.qemu_ref}
       init=${steps.closure.outputs.init} initrd=${steps.closure.outputs.initrd}
       "virtiofsd=$(readlink --canonicalize "$STATE/virtiofsd")/bin/virtiofsd"

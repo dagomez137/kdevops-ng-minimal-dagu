@@ -488,7 +488,9 @@ def main():
             "The kvm group takes effect at your next login. Ubuntu 23.10 and"
             " later also refuse virtiofsd its user namespace"
             " until kernel.apparmor_restrict_unprivileged_userns=0. Then run"
-            " each section's failing tests:"
+            " each section's failing tests; kernel_repo=<your Linux repository>"
+            " and qemu_repo=<your QEMU repository> check the trees out as"
+            " their worktrees, in group=<directory>:"
         ),
         "",
     ]

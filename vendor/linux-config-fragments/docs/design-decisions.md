@@ -331,6 +331,11 @@ Consequences caught so far:
   netfilter symbol. `core/systemd.config` writes it explicitly. It
   was tristate through 7.0, so a stale `=m` silently demoted to `n`
   on 7.1+; see that fragment's note.
+- `CONFIG_BLK_DEV_WRITE_MOUNTED` (default `y`): without it the
+  block layer refuses to open a mounted device for writing, so
+  `xfs_logprint` and `xfs_db` fail with `EBUSY` on a mounted
+  scratch device (fstests xfs/017, xfs/176).
+  `storage/block-layer.config` writes it.
 
 The general rule: if a Kconfig symbol says `default y` and a
 fragment needs it, set it explicitly. Do not rely on the default
@@ -404,9 +409,6 @@ the headless serial-console model.
 `CONFIG_UEVENT_HELPER_PATH`, `CONFIG_BPFILTER`.** Removed from the
 kernel entirely. Keeping them in any fragment would make it fail
 against a modern tree.
-
-**`CONFIG_BLK_DEV_WRITE_MOUNTED`.** Default `y` in Kconfig; setting
-it again in a fragment is noise.
 
 ## `kvm_guest.config` is not referenced
 

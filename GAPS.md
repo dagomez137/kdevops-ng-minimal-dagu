@@ -101,7 +101,7 @@ is busy" from Nix's evaluation cache; the warnings are harmless.
 
 **Out-of-tree Rust kernels are not reproducible across directories.**
 Since dda135077ecc9 ("rust: build: remap path to avoid absolute path",
-v7.1), an `O=` build passes rustc `--remap-path-scope=macro` when rustc
+v7.0), an `O=` build passes rustc `--remap-path-scope=macro` when rustc
 has it (stable in 1.95, which nixpkgs ships; 1.91 lacks it). The scope
 covers every remap, ours from `KRUSTFLAGS` included, so Rust debug info
 keeps the absolute build directory as `DW_AT_comp_dir`, the build ID
@@ -112,9 +112,20 @@ builds in the source tree instead, which gets no scope option; kdevops-ng's
 Rust kernels built with rustc 1.95 carry the same leak, and
 `Documentation/kbuild/reproducible-builds.rst` says nothing about Rust.
 
-**Nothing is reused between runs.** Every run clones, builds the kernel and
-QEMU and evaluates the closure again: 29m16s of the first CI job, against
-7m57s for a whole run on a 16-core host.
+**The tree holds one build, so developer tools cost a build.** The store
+keeps `bzImage` and the modules, not the objects and `.cmd` files the
+developer tools and the checks read. A tree whose kernel came from the
+store is built in place first (`devtools`, `in_tree`), from where its last
+build left off. kdevops-ng copies a layer of generated files from the store
+instead; over a tree that holds other objects, kbuild's `if_changed` then
+trusts the copied `.cmd` files and the next build links the wrong objects.
+An `O=` directory per identity would hold several builds side by side, at
+the price of the Rust entry above.
+
+**Nothing is reused between CI runs.** A host reuses a kernel or QEMU it
+built before, by identity, but a fresh runner clones, builds both and
+evaluates the closure again: 29m16s of the first CI job, against 7m57s for
+a whole run on a 16-core host.
 
 **Cachix needs a known store path.** The kernel enters the store with
 `nix store add-path`, so no derivation names it and a fresh runner cannot

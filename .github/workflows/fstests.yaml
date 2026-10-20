@@ -5,6 +5,7 @@
 # step the job runs only what a developer runs locally (dagu start, dagu
 # status) and collects the files the DAG wrote.
 name: fstests
+run-name: "fstests: ${{ github.event_name == 'push' && 'smoke' || inputs.section }}${{ inputs.kernel_ref && format(' {0}', inputs.kernel_ref) || '' }}"
 
 # A push runs the smoke tests, to show the whole system still works; a
 # manual run runs fstests' auto group on one section, sharded.

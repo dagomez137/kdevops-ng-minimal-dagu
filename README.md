@@ -131,9 +131,11 @@ takes every input as a long option, prints each command it runs
 `steps/qsu/ssh` is the one SSH command line the guest steps share; it gives
 up after five minutes without an answer from the guest.
 
-The kernel is built from a shallow clone with the build timestamp, user,
-host, counter and source paths pinned, then added to the Nix store, so the
-same tag gives the same store path on any host.
+The kernel is built with its build timestamp, user, host, counter and
+source paths pinned, then added to the Nix store, so the same tree gives
+the same store path on any host. `KERNEL.md` covers the kernel steps, the
+optional developer tools, checks, selftests and usertests, and what each
+took from kdevops-ng.
 
 The guest is nixos-flake's imageless backend, its fstests, selftests and
 usertests modules and a share for each (`guest/shares.nix`). The fstests module's

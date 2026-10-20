@@ -51,9 +51,10 @@ are check's `-I` and `-L`, `stop_on_fail=false` turns `-I` into `-i`, and
 `test_timeout` is the seconds systemd gives each test, three times its
 time in `guest/xfs.times` for a slower one. A section listed in `notrun`
 (`guest/xfs.notrun`) fails when it skips a test the list does not name for
-it, which is how a missing tool, kernel option or device shows up. CI's
-smoke job runs the about 100 tests of `guest/xfs.smoke`, which between them
-reach every `_require_*` helper of the passing auto tests:
+it, which is how a missing tool, kernel option or device shows up. A
+push runs CI's smoke tests, the about 100 tests of `guest/xfs.smoke`,
+which between them reach every `_require_*` helper of the passing auto
+tests:
 
 ```sh
 nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
@@ -68,16 +69,17 @@ this host's `shard`; `.github/workflows/sizing.yaml` times one slice of
 
 `baseline` sets the run against an earlier run's `outcomes`: a test that
 passed there and fails here is a regression. The workflow's manual run
-publishes one with `publish`, as the assets of release
-`baseline-<kernel_ref>`, from `runs` runs of `auto` (a test that both
-passed and failed is flaky), to set a patch series on top of that tag
+runs `auto` on the one section it is given, `runs` times (a test that
+both passed and failed is flaky), and with `publish` adds the section's
+`<section>.outcomes`, `<section>.report.txt` and `<section>.notrun` to
+release `baseline-<kernel_ref>`, to set a patch series on top of that tag
 against:
 
 ```sh
 nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
     --command dagu --config config.yaml start fstests -- \
     kernel_url=file://$HOME/linux kernel_ref=my-series groups=auto tests= \
-    baseline=https://github.com/dagomez137/kdevops-ng-minimal-dagu/releases/download/baseline-v7.3/outcomes
+    baseline=https://github.com/dagomez137/kdevops-ng-minimal-dagu/releases/download/baseline-v7.3/xfs_bs4k_ss4k.outcomes
 ```
 
 The host needs Nix with the `nix-command` and `flakes` features,
@@ -124,7 +126,7 @@ takes every input as a long option, prints each command it runs
 | `steps/fstests/wipe` | `.#default` | the disks emptied, per section |
 | `steps/fstests/prepare` | `.#default` | the mount points, per section |
 | `steps/fstests/start` | `.#default` | `outcome`: `xfstests@<section>.service` run to its end, stopped at the deadline, or the guest died and the section's exclude list is written |
-| `steps/fstests/report` | `.#default` | `report.txt`, a plain-text mail of the failures, set against a baseline, with how to reproduce them; `outcomes`, every test's outcome; `notrun`, every skip. Merged from every guest that ran a section: per section on its share, per run in the state directory, per workflow in CI's report job |
+| `steps/fstests/report` | `.#default` | `report.txt`, a plain-text mail of the failures, set against a baseline, with how to reproduce them; `outcomes`, every test's outcome; `notrun`, every skip. Merged from every guest that ran a section: per section on its share, per run in the state directory, per run in CI's report job |
 | `steps/fstests/judge` | `.#default` | fails unless every guest ran every section to the end and skipped only what `notrun` expects |
 | `steps/qsu/console` | `.#default` | `console.log` on the share, the VM's console from the journal |
 

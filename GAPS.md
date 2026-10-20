@@ -155,16 +155,17 @@ sandbox and starts the runner user's systemd manager through lingering. It
 is the one exception to the user-mode rule, scoped in `CLAUDE.md`.
 
 **6 h per job.** `auto` on one section takes about 6 h on a runner, so
-the workflow builds once and runs each section in 6 shards, 18 jobs plus
-smoke, under the 20 a Free account runs at a time; two guests per runner
+the workflow builds once and runs the section in 6 shards, 6 jobs per
+run, under the 20 a Free account runs at a time; two guests per runner
 bring a shard from about 60 to about 40 min.
 
 **The workflow still decides.** CI must run only what a developer runs
 locally, and `.github/workflows/fstests.yaml` still computes: the list of
-runs (`seq | jq`), the section and shard matrix, the smoke test list, the
-default kernel_ref, the report job (kernel_ref read from the shares, the
-baseline release probed with `curl`, one report per kind, the fenced
-summary, judge per kind) and the baseline release (`gh release`). Dagu and
+runs (`seq | jq`), the shard matrix, smoke on a push and auto otherwise,
+the list of sections to choose from, the smoke test list, the default
+kernel_ref, the report job (kernel_ref read from the shares, the baseline
+probed with `curl`, the fenced summary) and the baseline release (`gh
+release`, each file renamed after its section). Dagu and
 Actions both orchestrate; Dagu should own all of it, and GitHub only lend
 runners. A possible plan: a `plan` DAG writes the job matrix to a file the
 workflow reads with `fromJSON`, each job runs `dagu start fstests` with

@@ -34,7 +34,7 @@ report.py:
       --command steps/fstests/report \\
       --shares "$(echo ~/.local/state/qemu-system/fstests-*/xfstests)" \\
       --sections xfs_bs4k_ss4k --notrun guest/xfs.notrun \\
-      --baseline "$baseline/baseline-v7.3/outcomes" \\
+      --baseline "$baseline/baseline-v7.3/xfs_bs4k_ss4k.outcomes" \\
       --output ~/.local/state/kdevops-ng-minimal-dagu/report
 """
 

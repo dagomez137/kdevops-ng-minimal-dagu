@@ -39,6 +39,7 @@ report.py:
 """
 
 import argparse
+import collections
 import html
 import re
 import shlex
@@ -160,7 +161,7 @@ def merge(shares, name):
         elif report.name != "result.xml":
             section.problems.append(f"{share}: check did not finish")
         if (results / "crashes").is_file():
-            section.crashes += (results / "crashes").read_text().split()
+            section.crashes += (results / "crashes").read_text().splitlines()
         if not report.is_file():
             continue
         text = report.read_text(errors="replace")
@@ -320,7 +321,14 @@ def main():
         if not any(t.outcome != "notrun" for t in section.tests.values()):
             incomplete.append(f"{section.name}: no test ran")
         incomplete += [f"{section.name}: {problem}" for problem in section.problems]
-        crashes += [f"  {section.name} {name}" for name in section.crashes]
+        crashes += [
+            wrap(
+                f"{section.name} {crash}" + (f" ({n} times)" if n > 1 else ""),
+                "  ",
+                "    ",
+            )
+            for crash, n in collections.Counter(section.crashes).items()
+        ]
         listed = expected.get(section.name)
         for name, test in section.tests.items():
             outcome = test.outcome

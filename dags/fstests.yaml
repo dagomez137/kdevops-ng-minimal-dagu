@@ -107,10 +107,14 @@ params:
   # it skips anything else. Empty accepts every skip.
   - name: notrun
     default: guest/xfs.notrun
-  # The outcomes file, or its URL, of an earlier run to set this one
-  # against, such as a release's baseline-<kernel_ref>; empty sets none.
+  # The outcomes file, or its URL, of an earlier run to set every section
+  # against; empty takes each section's from baselines.
   - name: baseline
     default: ""
+  # Where baseline-<tag>/<section>.outcomes are, a URL or a directory: the
+  # nearest tag's is each section's baseline. Empty sets none.
+  - name: baselines
+    default: https://github.com/dagomez137/kdevops-ng-minimal-dagu/releases/download
 
 env:
   # Dagu hands steps a filtered environment; systemctl --user needs this.
@@ -264,6 +268,8 @@ steps:
         shares: ${steps.plan.outputs.shares}
         notrun: ${params.notrun}
         baseline: ${params.baseline}
+        baselines: ${params.baselines}
+        kernel_name: ${steps.inputs.outputs.kernel_name}
         dir: $STATE/reports/${steps.inputs.outputs.kernel_name}/fstests/${ITEM}
     parallel:
       items: ${params.sections}
@@ -293,16 +299,30 @@ params:
     description: the skips each section expects, empty for any
   - name: baseline
     description: the outcomes, or their URL, to set the section against
+  - name: baselines
+    description: where the nearest tag's baseline is looked for
+  - name: kernel_name
+    description: the kernel's tag, else git describe
   - name: dir
     description: where the report goes
 
 steps:
+  - id: baseline
+    run: >-
+      nix develop --ignore-env --keep-env-var HOME
+      --command steps/fstests/baseline --kernel-name ${params.kernel_name}
+      --section ${params.section} --baselines "${params.baselines}"
+      --baseline "${params.baseline}" --output "$DAGU_OUTPUT_FILE"
+    outputs:
+      - name: baseline
+
   - id: report
+    depends: baseline
     run: >-
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/report --shares "${params.shares}"
       --sections ${params.section} --notrun "${params.notrun}"
-      --baseline "${params.baseline}" --output "${params.dir}"
+      --baseline "${steps.baseline.outputs.baseline}" --output "${params.dir}"
 
   - id: judge
     depends: report

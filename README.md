@@ -67,19 +67,21 @@ default) and gives each a time-balanced shard of the run's tests, or of
 this host's `shard`; `.github/workflows/sizing.yaml` times one slice of
 `auto` on guests of several shapes.
 
-`baseline` sets the run against an earlier run's `outcomes`: a test that
+Each section is set against an earlier run's `outcomes`: a test that
 passed there and fails here is a regression. The workflow's manual run
 runs `auto` on the one section it is given, `runs` times (a test that
 both passed and failed is flaky), and with `publish` adds the section's
 `<section>.outcomes`, `<section>.report.txt` and `<section>.notrun` to
-release `baseline-<kernel_ref>`, to set a patch series on top of that tag
-against:
+release `baseline-<kernel_ref>`. A run takes the baseline of its kernel's
+nearest tag from `baselines`, this repository's releases by default, so a
+series on top of v7.3 is set against `baseline-v7.3` with no parameter;
+`baseline=FILE` names one outcomes file for every section instead, and
+`baselines=` sets none:
 
 ```sh
 nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
     --command dagu --config config.yaml start fstests -- \
-    kernel_url=file://$HOME/linux kernel_ref=my-series groups=auto tests= \
-    baseline=https://github.com/dagomez137/kdevops-ng-minimal-dagu/releases/download/baseline-v7.3/xfs_bs4k_ss4k.outcomes
+    kernel_url=file://$HOME/linux kernel_ref=my-series groups=auto tests=
 ```
 
 The host needs Nix with the `nix-command` and `flakes` features,
@@ -126,6 +128,7 @@ takes every input as a long option, prints each command it runs
 | `steps/fstests/wipe` | `.#default` | the disks emptied, per section |
 | `steps/fstests/prepare` | `.#default` | the mount points, per section |
 | `steps/fstests/start` | `.#default` | `outcome`: `xfstests@<section>.service` run to its end, stopped at the deadline, or the guest died and the section's exclude list is written |
+| `steps/fstests/baseline` | `.#default` | `baseline`: the outcomes of the kernel's nearest tag for a section, empty when none was published |
 | `steps/fstests/report` | `.#default` | `report.txt`, a plain-text mail of the failures, set against a baseline, with how to reproduce them; `outcomes`, every test's outcome; `notrun`, every skip. Merged from every guest that ran a section: per section on its share, per run in the state directory, per run in CI's report job |
 | `steps/fstests/judge` | `.#default` | fails unless every guest ran every section to the end and skipped only what `notrun` expects |
 | `steps/qsu/console` | `.#default` | `console.log` on the share, the VM's console from the journal |

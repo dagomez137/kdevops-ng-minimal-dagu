@@ -261,12 +261,13 @@ jobs:
       # artifacts need one.
       - name: Write the report
         run: |
-          ref=$(sed --quiet 's/^kernel_ref=//p' "$RUNNER_TEMP"/fstests/*/qemu-system/*/xfstests/run | head --lines=1)
-          echo "kernel_ref=$ref" >>"$GITHUB_ENV"
-          baseline=https://github.com/$GITHUB_REPOSITORY/releases/download/baseline-$ref/$SECTION.outcomes
-          if ! curl --fail --silent --head --location "$baseline" >/dev/null; then
-            baseline=
-          fi
+          run=$(echo "$RUNNER_TEMP"/fstests/*/qemu-system/*/xfstests/run | cut --delimiter=' ' --fields=1)
+          echo "kernel_ref=$(sed --quiet 's/^kernel_ref=//p' "$run")" >>"$GITHUB_ENV"
+          nix develop --ignore-env --keep-env-var HOME --command steps/fstests/baseline \
+            --kernel-name "$(sed --quiet 's/^kernel_name=//p' "$run")" --section "$SECTION" \
+            --baselines "https://github.com/$GITHUB_REPOSITORY/releases/download" --baseline "" \
+            --output "$RUNNER_TEMP/baseline.env"
+          . "$RUNNER_TEMP/baseline.env"
           nix develop --ignore-env --keep-env-var HOME --command steps/fstests/report \
             --shares "$(echo "$RUNNER_TEMP"/fstests/*/qemu-system/fstests-*/xfstests)" \
             --sections "$SECTION" --notrun guest/xfs.notrun --baseline "$baseline" \

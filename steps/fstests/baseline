@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: copyleft-next-0.3.1
+## Usage: steps/fstests/baseline --kernel-name NAME --section SECTION
+##            --baselines URL|DIR --baseline FILE|URL --output FILE
+##
+## Find the outcomes to set SECTION of a run of kernel NAME (a tag, or git
+## describe's TAG-N-gCOMMIT with -dirty for changes) against, and append
+## baseline=<it> to FILE, empty when there is none. A non-empty --baseline
+## is taken as it is; otherwise the baseline is that of the nearest tag,
+## BASELINES/baseline-TAG/SECTION.outcomes, the assets a manual CI run
+## publishes, when it exists. A series on top of v7.3 is set against
+## v7.3's:
+##
+##   nix develop --ignore-env --keep-env-var HOME \
+##       --command steps/fstests/baseline \
+##       --kernel-name v7.3-5-g0123456789ab --section xfs_bs4k_ss4k \
+##       --baselines https://github.com/dagomez137/kdevops-ng-minimal-dagu/releases/download \
+##       --baseline '' --output /dev/stdout
+set -o errexit -o nounset -o pipefail
+
+while [ $# -gt 0 ]; do
+	case $1 in
+	--kernel-name | --section | --baselines | --baseline | --output)
+		name=${1#--}
+		declare "${name//-/_}=$2"
+		;;
+	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
+	esac
+	shift 2
+done
+: "${kernel_name:?} ${section:?} ${baselines?} ${baseline?} ${output:?}"
+
+set -o xtrace
+if [ -z "$baseline" ] && [ -n "$baselines" ]; then
+	tag=$(sed --regexp-extended 's/-dirty$//; s/-[0-9]+-g[0-9a-f]+$//' <<<"$kernel_name")
+	candidate=$baselines/baseline-$tag/$section.outcomes
+	case $candidate in
+	http://* | https://*)
+		if curl --fail --silent --head --location "$candidate" >/dev/null; then
+			baseline=$candidate
+		fi
+		;;
+	*) if [ -s "$candidate" ]; then baseline=$candidate; fi ;;
+	esac
+fi
+echo "baseline=$baseline" >>"$output"

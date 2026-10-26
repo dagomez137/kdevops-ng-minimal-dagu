@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: copyleft-next-0.3.1
 ## Usage: steps/qsu/render --name VM --cpus N --ram MIB --qemu BINARY
 ##            --virtiofsd BINARY --kernel PATH --init PATH --initrd PATH
+##            --logical-block-size BYTES --physical-block-size BYTES
+##            --atomic-nawun N --atomic-nawupf N
 ##            --key FILE --state DIR --qsu DIR --output FILE
 ##
 ## Write the qemu-system@VM.service unit, its virtiofsd shares and NVMe
@@ -9,9 +11,10 @@
 ## The guest has N CPUs and MIB MiB of memory, boots KERNEL (its image and
 ## modules) with the NixOS INIT and INITRD, and gets five shares: the Nix
 ## store, the kernel's modules and DIR/{xfstests,selftests,usertests} for the
-## suites, three NVMe drives that
-## write 128 KiB atomically (Linux reads only the per-namespace NAWUPF) and a
-## vsock device. Root in the guest accepts the SSH key FILE, handed over as
+## suites, three NVMe drives of the logical and physical block sizes whose
+## namespaces have QEMU's atomic.nawun and atomic.nawupf, the largest atomic
+## write in logical blocks, 0's based (Linux reads only NAWUPF; 0 for none),
+## and a vsock device. Root in the guest accepts the SSH key FILE, handed over as
 ## the ssh.authorized_keys.root credential on the kernel command line. DIR is
 ## the unit's state directory and also holds the vars file and the NVMe
 ## drives. A kernel panic reboots the guest at once (panic=-1), which under
@@ -25,6 +28,8 @@
 ##       --virtiofsd ~/.local/state/kdevops-ng-minimal-dagu/virtiofsd/bin/virtiofsd \
 ##       --kernel /nix/store/...-linux-7.2.11 --init /nix/store/...-nixos-system-.../init \
 ##       --initrd /nix/store/...-initrd-linux/initrd \
+##       --logical-block-size 4096 --physical-block-size 4096 \
+##       --atomic-nawun 3 --atomic-nawupf 3 \
 ##       --key ~/.local/state/kdevops-ng-minimal-dagu/ssh/id_ed25519 \
 ##       --state ~/.local/state/qemu-system/fstests-1 --qsu vendor/qemu-system-units \
 ##       --output /dev/stdout
@@ -33,15 +38,32 @@ set -o errexit -o nounset -o pipefail
 while [ $# -gt 0 ]; do
 	case $1 in
 	--name | --cpus | --ram | --qemu | --virtiofsd | --kernel | --init | --initrd | \
+		--logical-block-size | --physical-block-size | --atomic-nawun | --atomic-nawupf | \
 		--key | --state | --qsu | --output)
-		declare "${1#--}=$2"
+		opt=${1#--}
+		declare "${opt//-/_}=$2"
 		;;
 	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
 	esac
 	shift 2
 done
 : "${name:?} ${cpus:?} ${ram:?} ${qemu:?} ${virtiofsd:?} ${kernel:?} ${init:?} ${initrd:?} ${key:?}"
+: "${logical_block_size:?} ${physical_block_size:?} ${atomic_nawun:?} ${atomic_nawupf:?}"
 : "${state:?} ${qsu:?} ${output:?}"
+# QEMU takes block sizes that are powers of two from 512 B to 2 MiB, the
+# physical no smaller than the logical, but says so only once the unit
+# starts.
+for size in logical_block_size physical_block_size; do
+	if ! [[ ${!size} =~ ^[0-9]+$ ]] || [ "${!size}" -lt 512 ] || [ "${!size}" -gt 2097152 ] ||
+		[ $((${!size} & (${!size} - 1))) -ne 0 ]; then
+		echo "--${size//_/-} takes a power of two from 512 to 2097152, not '${!size}'" >&2
+		exit 2
+	fi
+done
+if [ "$physical_block_size" -lt "$logical_block_size" ]; then
+	echo "--physical-block-size $physical_block_size is below --logical-block-size $logical_block_size" >&2
+	exit 2
+fi
 
 set -o xtrace
 # kdevops-ng's f/qsu/common.py: 100 plus the name's SHA-256 modulo 9973.
@@ -54,6 +76,8 @@ vars=$state/vars.json
 jq --null-input --arg name "$name" --arg qemu "$qemu" --arg virtiofsd "$virtiofsd" \
 	--arg kernel "$kernel" --arg init "$init" --arg initrd "$initrd" --arg state "$state" \
 	--argjson cpus "$cpus" --argjson ram "$ram" --argjson cid "$cid" \
+	--argjson lbs "$logical_block_size" --argjson pbs "$physical_block_size" \
+	--argjson nawun "$atomic_nawun" --argjson nawupf "$atomic_nawupf" \
 	--arg credential "$credential" '{
 	vm_name: $name,
 	qemu_binary: $qemu,
@@ -76,8 +100,10 @@ jq --null-input --arg name "$name" --arg qemu "$qemu" --arg virtiofsd "$virtiofs
 	nvme: {drives: [range(3) | {namespaces: [{
 		file: "\($state)/nvme\(.).raw",
 		format: "raw",
-		"atomic.nawun": 255,
-		"atomic.nawupf": 255
+		logical_block_size: $lbs,
+		physical_block_size: $pbs,
+		"atomic.nawun": $nawun,
+		"atomic.nawupf": $nawupf
 	}]}]},
 	vsock_cid: $cid,
 	extra_qemu_args: "-no-reboot"

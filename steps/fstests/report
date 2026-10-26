@@ -251,7 +251,8 @@ def reproduce(run, sections, failing):
     ]
     keys = ("kernel_url", "kernel_ref", "qemu_url", "qemu_ref")
     keys += ("compiler", "config_method", "config", "extra_warn", "kcflags")
-    keys += ("make_flags", "cpus", "ram")
+    keys += ("make_flags", "cpus", "ram", "logical_block_size", "physical_block_size")
+    keys += ("atomic_nawun", "atomic_nawupf")
     params = [shlex.quote(f"{key}={run[key]}") for key in keys if run.get(key)]
     by_section = {}
     for test_name, where in failing.items():
@@ -453,7 +454,15 @@ def main():
         (
             "guests",
             f"{len(shares)}, {run.get('cpus', '?')} CPUs and {run.get('ram', '?')} MiB"
-            f" each, {drives} GiB NVMe drives",
+            f" each, {drives} GiB NVMe drives"
+            + (
+                f" of {run['logical_block_size']} B logical,"
+                f" {run['physical_block_size']} B physical blocks,"
+                f" atomic.nawun {run['atomic_nawun']}"
+                f" and atomic.nawupf {run['atomic_nawupf']}"
+                if "atomic_nawupf" in run
+                else ""
+            ),
         ),
         (
             "harness",

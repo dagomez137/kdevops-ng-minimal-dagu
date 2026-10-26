@@ -62,6 +62,15 @@ nix develop --ignore-env --keep-env-var HOME --keep-env-var XDG_RUNTIME_DIR \
     "tests=$(grep --invert-match '^#' guest/xfs.smoke | paste --serial --delimiters=' ')"
 ```
 
+Each guest has three NVMe drives with QEMU's `logical_block_size` and
+`physical_block_size` (4096 bytes by default) and `atomic.nawun` and
+`atomic.nawupf` (3 by default: 4 logical blocks, 16 KiB), as the
+`atomic_nawun` and `atomic_nawupf` parameters; a section whose block or
+sector size is below the drives' logical block is skipped. The sections
+with 512-byte to 2 KiB sectors need `logical_block_size=512
+physical_block_size=512`, with `atomic_nawun=31 atomic_nawupf=31` for
+16 KiB atomic writes.
+
 `vms=V` boots V guests of `cpus` CPUs and `ram` MiB each (4 and 4096 by
 default) and gives each a time-balanced shard of the run's tests, or of
 this host's `shard`; `.github/workflows/sizing.yaml` times one slice of

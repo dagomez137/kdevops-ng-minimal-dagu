@@ -66,6 +66,22 @@ on:
       kernel_ref:
         description: the kernel tag or branch; empty takes the DAG's default
         default: ""
+      logical_block_size:
+        description: the NVMe drives' logical block size in bytes
+        type: choice
+        default: "4096"
+        options: ["512", "1024", "2048", "4096"]
+      physical_block_size:
+        description: the NVMe drives' physical block size in bytes, no smaller than the logical
+        type: choice
+        default: "4096"
+        options: ["512", "1024", "2048", "4096", "8192", "16384", "32768", "65536"]
+      atomic_nawun:
+        description: the NVMe namespaces' atomic.nawun, in logical blocks, 0's based
+        default: "3"
+      atomic_nawupf:
+        description: the NVMe namespaces' atomic.nawupf, in logical blocks, 0's based
+        default: "3"
       runs:
         description: how many times to run every test
         type: number
@@ -209,6 +225,10 @@ jobs:
           "prebuilt=$RUNNER_TEMP/prebuilt" "sections=${{ env.SECTION }}"
           "shard=${{ matrix.shard }}" "groups=${{ env.FSTESTS_GROUPS }}" "tests=${{ env.FSTESTS_TESTS }}"
           vms=2 cpus=2 ram=4096
+          ${{ inputs.logical_block_size && format('logical_block_size={0}', inputs.logical_block_size) || '' }}
+          ${{ inputs.physical_block_size && format('physical_block_size={0}', inputs.physical_block_size) || '' }}
+          ${{ inputs.atomic_nawun != '' && format('atomic_nawun={0}', inputs.atomic_nawun) || '' }}
+          ${{ inputs.atomic_nawupf != '' && format('atomic_nawupf={0}', inputs.atomic_nawupf) || '' }}
 
       - name: Show the run
         if: always()

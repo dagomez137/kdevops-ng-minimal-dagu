@@ -57,6 +57,8 @@ steps:
       --qemu ${steps.inputs.outputs.qemu} --virtiofsd ${steps.inputs.outputs.virtiofsd}
       --kernel ${steps.inputs.outputs.kernel} --init ${steps.inputs.outputs.init}
       --initrd ${steps.inputs.outputs.initrd}
+      --logical-block-size 4096 --physical-block-size 4096
+      --atomic-nawun 3 --atomic-nawupf 3
       --key ${steps.key.outputs.key} --state "$VM_STATE" --qsu vendor/qemu-system-units
       --output "$DAGU_OUTPUT_FILE"
     outputs:

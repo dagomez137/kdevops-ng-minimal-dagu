@@ -86,6 +86,22 @@ params:
   - name: ram
     type: integer
     default: 4096
+  # The guests' NVMe drives: QEMU's logical_block_size and
+  # physical_block_size, in bytes, and its atomic.nawun and atomic.nawupf,
+  # the largest atomic write in logical blocks, 0's based. A section whose
+  # block or sector size is below logical_block_size is skipped.
+  - name: logical_block_size
+    type: integer
+    default: 4096
+  - name: physical_block_size
+    type: integer
+    default: 4096
+  - name: atomic_nawun
+    type: integer
+    default: 3
+  - name: atomic_nawupf
+    type: integer
+    default: 3
   # A directory steps/nix/export wrote on another host, to boot instead of
   # building; empty builds here.
   - name: prebuilt
@@ -220,6 +236,9 @@ steps:
       nix develop --ignore-env --keep-env-var HOME
       --command steps/fstests/describe --build "$STATE/build.env"
       --shares "${steps.plan.outputs.shares}" --cpus ${params.cpus} --ram ${params.ram}
+      --logical-block-size ${params.logical_block_size}
+      --physical-block-size ${params.physical_block_size}
+      --atomic-nawun ${params.atomic_nawun} --atomic-nawupf ${params.atomic_nawupf}
       --groups "${params.groups}" --tests "${params.tests}"
 
   # One run of the guest DAG below per guest, side by side; a failed guest
@@ -236,6 +255,10 @@ steps:
         shard: ${ITEM.shard}
         cpus: ${params.cpus}
         ram: ${params.ram}
+        logical_block_size: ${params.logical_block_size}
+        physical_block_size: ${params.physical_block_size}
+        atomic_nawun: ${params.atomic_nawun}
+        atomic_nawupf: ${params.atomic_nawupf}
         kernel: ${steps.inputs.outputs.kernel}
         qemu: ${steps.inputs.outputs.qemu}
         init: ${steps.inputs.outputs.init}
@@ -348,6 +371,14 @@ params:
     description: the guest's CPUs
   - name: ram
     description: the guest's memory in MiB
+  - name: logical_block_size
+    description: the NVMe drives' logical block size in bytes
+  - name: physical_block_size
+    description: the NVMe drives' physical block size in bytes
+  - name: atomic_nawun
+    description: the NVMe namespaces' atomic.nawun
+  - name: atomic_nawupf
+    description: the NVMe namespaces' atomic.nawupf
   - name: kernel
     description: the kernel store path
   - name: qemu
@@ -390,6 +421,9 @@ steps:
       --cpus ${params.cpus} --ram ${params.ram}
       --qemu ${params.qemu} --virtiofsd ${params.virtiofsd}
       --kernel ${params.kernel} --init ${params.init} --initrd ${params.initrd}
+      --logical-block-size ${params.logical_block_size}
+      --physical-block-size ${params.physical_block_size}
+      --atomic-nawun ${params.atomic_nawun} --atomic-nawupf ${params.atomic_nawupf}
       --key ${params.key} --state "$VM_STATE" --qsu vendor/qemu-system-units
       --output "$DAGU_OUTPUT_FILE"
     outputs:

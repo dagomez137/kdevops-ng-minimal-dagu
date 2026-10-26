@@ -1,30 +1,41 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: copyleft-next-0.3.1
 ## Usage: steps/fstests/describe --build FILE --shares DIRS --cpus N --ram MIB
+##            --logical-block-size BYTES --physical-block-size BYTES
+##            --atomic-nawun N --atomic-nawupf N
 ##            --groups GROUPS --tests TESTS
 ##
 ## Write the file run into each xfstests share in DIRS: what
 ## steps/fstests/report needs to say what ran and how to run it again.
 ## That is the build manifest FILE (the kernel's URL, ref, commit and store
 ## path, QEMU's URL and ref), the xfstests and xfsprogs of the guest's
-## closure, the guests' N CPUs and MIB MiB, the GROUPS or TESTS check runs
+## closure, the guests' N CPUs and MIB MiB, their NVMe drives' logical and
+## physical block sizes and atomic.nawun and atomic.nawupf, the GROUPS or TESTS check runs
 ## and this checkout's URL and commit:
 ##
 ##   nix develop --ignore-env --keep-env-var HOME \
 ##       --command steps/fstests/describe \
 ##       --build ~/.local/state/kdevops-ng-minimal-dagu/build.env \
 ##       --shares "$(echo ~/.local/state/qemu-system/fstests-*/xfstests)" \
-##       --cpus 4 --ram 4096 --groups auto --tests ''
+##       --cpus 4 --ram 4096 --logical-block-size 4096 --physical-block-size 4096 \
+##       --atomic-nawun 3 --atomic-nawupf 3 \
+##       --groups auto --tests ''
 set -o errexit -o nounset -o pipefail
 
 while [ $# -gt 0 ]; do
 	case $1 in
-	--build | --shares | --cpus | --ram | --groups | --tests) declare "${1#--}=$2" ;;
+	--build | --shares | --cpus | --ram | --logical-block-size | --physical-block-size | \
+		--atomic-nawun | --atomic-nawupf | --groups | --tests)
+		opt=${1#--}
+		declare "${opt//-/_}=$2"
+		;;
 	*) sed --quiet 's/^## \{0,1\}//p' "$0" >&2 && exit 2 ;;
 	esac
 	shift 2
 done
-: "${build:?} ${shares:?} ${cpus:?} ${ram:?} ${groups?} ${tests?}"
+: "${build:?} ${shares:?} ${cpus:?} ${ram:?} ${logical_block_size:?} ${physical_block_size:?}"
+: "${atomic_nawun:?} ${atomic_nawupf:?}"
+: "${groups?} ${tests?}"
 
 read -r -a dirs <<<"$shares"
 set -o xtrace
@@ -44,6 +55,10 @@ for share in "${dirs[@]}"; do
 			sed 's/^/xfsprogs=/'
 		echo "cpus=$cpus"
 		echo "ram=$ram"
+		echo "logical_block_size=$logical_block_size"
+		echo "physical_block_size=$physical_block_size"
+		echo "atomic_nawun=$atomic_nawun"
+		echo "atomic_nawupf=$atomic_nawupf"
 		echo "groups=$groups"
 		echo "tests=$tests"
 		echo "harness_url=$(git remote get-url origin)"

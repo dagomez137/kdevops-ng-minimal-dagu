@@ -63,6 +63,28 @@ on:
           - xfs_full_bs64k_ss8k
           - xfs_full_bs64k_ss16k
           - xfs_full_bs64k_ss32k
+          - xfs_noreflink_bs4k_ss4k
+          - xfs_noreflink_bs8k_ss1k
+          - xfs_noreflink_bs8k_ss2k
+          - xfs_noreflink_bs8k_ss4k
+          - xfs_noreflink_bs8k_ss8k
+          - xfs_noreflink_bs16k_ss1k
+          - xfs_noreflink_bs16k_ss2k
+          - xfs_noreflink_bs16k_ss4k
+          - xfs_noreflink_bs16k_ss8k
+          - xfs_noreflink_bs16k_ss16k
+          - xfs_noreflink_bs32k_ss1k
+          - xfs_noreflink_bs32k_ss2k
+          - xfs_noreflink_bs32k_ss4k
+          - xfs_noreflink_bs32k_ss8k
+          - xfs_noreflink_bs32k_ss16k
+          - xfs_noreflink_bs32k_ss32k
+          - xfs_noreflink_bs64k_ss1k
+          - xfs_noreflink_bs64k_ss2k
+          - xfs_noreflink_bs64k_ss4k
+          - xfs_noreflink_bs64k_ss8k
+          - xfs_noreflink_bs64k_ss16k
+          - xfs_noreflink_bs64k_ss32k
       kernel_ref:
         description: the kernel tag or branch; empty takes the DAG's default
         default: ""
